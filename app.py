@@ -10,13 +10,71 @@ from skimage.metrics import structural_similarity as ssim
 import streamlit as st
 import yfinance as yf
 
-# ตั้งค่าหน้าเว็บ Streamlit
+# 1. ตั้งค่าหน้าเว็บ
 st.set_page_config(
-    page_title="US Stock Pattern Scanner", page_icon="📈", layout="wide"
+    page_title="US Stock Scanner",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
-st.title("📈 ระบบสแกนหุ้นสหรัฐฯ + AI Pattern Matcher")
-st.write("กดปุ่มด้านล่างเพื่อเริ่มสแกนหุ้นตามสัญญาณเทคนิคและเปรียบเทียบรูปทรงกราฟ")
+# 2. ฉีด Custom CSS สำหรับตกแต่ง UI หน้าจอมือถือโดยเฉพาะ
+st.markdown("""
+    <style>
+    /* ปรับ Padding รวมของหน้าเว็บ */
+    .block-container {
+        padding-top: 2rem !important;
+        padding-bottom: 2rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+    
+    /* ตกแต่ง Header ให้ขนาดพอดีจอมือถือ */
+    .main-title {
+        font-size: 1.8rem !important;
+        font-weight: 800 !important;
+        color: #1E293B;
+        text-align: center;
+        margin-bottom: 0.5rem;
+        line-height: 1.3;
+    }
+    
+    .sub-title {
+        font-size: 0.95rem !important;
+        color: #64748B;
+        text-align: center;
+        margin-bottom: 1.5rem;
+    }
+
+    /* ขยายปุ่มสแกนให้ใหญ่ สวย เด่น บนมือถือ */
+    .stButton > button {
+        width: 100% !important;
+        background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
+        color: white !important;
+        font-size: 1.1rem !important;
+        font-weight: 700 !important;
+        padding: 0.75rem 1rem !important;
+        border-radius: 12px !important;
+        border: none !important;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4) !important;
+    }
+
+    /* ซ่อน Footer และ Header เมนูของ Streamlit เพื่อความคลีน */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    </style>
+""", unsafe_allow_html=True)
+
+# --- ส่วนแสดงผล Header บนเว็บ ---
+st.markdown('<div class="main-title">📈 สแกนหุ้นสหรัฐฯ + AI Pattern</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">ค้นหาสัญญาณหุ้นกลับตัว และเปรียบเทียบรูปทรงกราฟอัตโนมัติ</div>', unsafe_allow_html=True)
 
 
 def get_base_directory():
@@ -31,71 +89,22 @@ def get_base_directory():
 
 def get_us_stock_tickers():
     tickers = [
-        'AAPL',
-        'MSFT',
-        'NVDA',
-        'AMZN',
-        'GOOGL',
-        'META',
-        'TSLA',
-        'AVGO',
-        'AMD',
-        'NFLX',
-        'COST',
-        'PEP',
-        'ADBE',
-        'CSCO',
-        'TMUS',
-        'INTC',
-        'CMCSA',
-        'QCOM',
-        'TXN',
-        'AMAT',
-        'HON',
-        'AMGN',
-        'SBUX',
-        'BKNG',
-        'GILD',
-        'MDLZ',
-        'ADP',
-        'ADI',
-        'VRTX',
-        'REGN',
-        'RKLB',
-        'IREN',
-        'EOSE',
-        'CRWV',
-        'NUAI',
-        'WDC',
-        'PLTR',
-        'SOUN',
-        'BBAI',
-        'IONQ',
-        'RGTI',
-        'QUBT',
-        'ASTS',
-        'LUNR',
-        'JOBY',
-        'ACHR',
-        'MARA',
-        'RIOT',
-        'CLSK',
-        'CIFR',
+        'AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA', 'AVGO', 'AMD', 'NFLX',
+        'COST', 'PEP', 'ADBE', 'CSCO', 'TMUS', 'INTC', 'CMCSA', 'QCOM', 'TXN', 'AMAT',
+        'HON', 'AMGN', 'SBUX', 'BKNG', 'GILD', 'MDLZ', 'ADP', 'ADI', 'VRTX', 'REGN',
+        'RKLB', 'IREN', 'EOSE', 'CRWV', 'NUAI', 'WDC', 'PLTR', 'SOUN', 'BBAI', 'IONQ',
+        'RGTI', 'QUBT', 'ASTS', 'LUNR', 'JOBY', 'ACHR', 'MARA', 'RIOT', 'CLSK', 'CIFR'
     ]
 
     try:
-        url_nasdaq = (
-            'ftp://ftp.nasdaqtrader.com/SymbolDirectory/nasdaqlisted.txt'
-        )
+        url_nasdaq = 'ftp://ftp.nasdaqtrader.com/SymbolDirectory/nasdaqlisted.txt'
         df_nasdaq = pd.read_csv(url_nasdaq, sep='|')
         nasdaq_stocks = df_nasdaq[
             (df_nasdaq['ETF'] == 'N') & (df_nasdaq['Test Issue'] == 'N')
         ]['Symbol'].tolist()
         tickers.extend(nasdaq_stocks)
 
-        url_other = (
-            'ftp://ftp.nasdaqtrader.com/SymbolDirectory/otherlisted.txt'
-        )
+        url_other = 'ftp://ftp.nasdaqtrader.com/SymbolDirectory/otherlisted.txt'
         df_other = pd.read_csv(url_other, sep='|')
         other_stocks = df_other[
             (df_other['ETF'] == 'N') & (df_other['Test Issue'] == 'N')
@@ -139,18 +148,12 @@ def check_ma_snr_combo(ticker):
         if not (near_support or near_ma50):
             return None
 
-        is_green = (latest_close > latest_open) or (
-            latest_close > df['close'].iloc[-2]
-        )
+        is_green = (latest_close > latest_open) or (latest_close > df['close'].iloc[-2])
         has_vol = latest_vol >= 300_000
 
         if is_green and has_vol:
-            dist_from_sup = (
-                (latest_close - support_level) / support_level
-            ) * 100
-            ma_diff_pct = (
-                (fast_ma.iloc[-1] - slow_ma.iloc[-1]) / slow_ma.iloc[-1]
-            ) * 100
+            dist_from_sup = ((latest_close - support_level) / support_level) * 100
+            ma_diff_pct = ((fast_ma.iloc[-1] - slow_ma.iloc[-1]) / slow_ma.iloc[-1]) * 100
 
             return {
                 'Ticker': ticker,
@@ -158,7 +161,7 @@ def check_ma_snr_combo(ticker):
                 'Support_Level ($)': round(support_level, 2),
                 'Dist_from_Support (%)': f'+{dist_from_sup:.2f}%',
                 'MA_Spread (%)': f'+{ma_diff_pct:.2f}%',
-                'Volume': f'{latest_vol:,.0f}',
+                'Volume': f"{latest_vol:,.0f}",
                 'Date': df.index[-1].strftime('%Y-%m-%d'),
             }
     except Exception:
@@ -179,8 +182,7 @@ def get_best_pattern_match(target_img_path, patterns_folder):
         return 'N/A', 'N/A'
 
     pattern_files = [
-        f
-        for f in os.listdir(patterns_folder)
+        f for f in os.listdir(patterns_folder)
         if f.lower().endswith(('.png', '.jpg', '.jpeg'))
     ]
     if not pattern_files:
@@ -199,9 +201,7 @@ def get_best_pattern_match(target_img_path, patterns_folder):
         if ref_img is None:
             continue
 
-        target_resized = cv2.resize(
-            target_img, (ref_img.shape[1], ref_img.shape[0])
-        )
+        target_resized = cv2.resize(target_img, (ref_img.shape[1], ref_img.shape[0]))
         score, _ = ssim(ref_img, target_resized, full=True)
         score = max(0.0, float(score))
 
@@ -212,7 +212,6 @@ def get_best_pattern_match(target_img_path, patterns_folder):
     return f'{best_score * 100:.1f}%', best_pattern_name
 
 
-# --- ส่วนอินเทอร์เฟซบนหน้าเว็บ Streamlit ---
 base_dir = get_base_directory()
 patterns_folder = os.path.join(base_dir, 'patterns')
 csv_folder = os.path.join(base_dir, 'csv')
@@ -220,7 +219,7 @@ csv_folder = os.path.join(base_dir, 'csv')
 os.makedirs(patterns_folder, exist_ok=True)
 os.makedirs(csv_folder, exist_ok=True)
 
-# ปุ่มสั่งสแกนบนหน้าเว็บ
+# ปุ่มสแกนแบบเด่นเต็มหน้าจอ
 if st.button('🚀 เริ่มสแกนหุ้นทันที'):
     st.info('กำลังเตรียมรายชื่อหุ้นและเริ่มสแกน...')
 
@@ -233,10 +232,7 @@ if st.button('🚀 เริ่มสแกนหุ้นทันที'):
     total_stocks = len(stock_list)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=25) as executor:
-        futures = {
-            executor.submit(check_ma_snr_combo, ticker): ticker
-            for ticker in stock_list
-        }
+        futures = {executor.submit(check_ma_snr_combo, ticker): ticker for ticker in stock_list}
 
         for future in concurrent.futures.as_completed(futures):
             count += 1
@@ -255,18 +251,16 @@ if st.button('🚀 เริ่มสแกนหุ้นทันที'):
         chart_folder = os.path.join(base_dir, f'Charts_Album_{time_stamp}')
         os.makedirs(chart_folder, exist_ok=True)
 
-        st.subheader('📸 ภาพกราฟของหุ้นที่สแกนพบ (พร้อม AI Match Score)')
+        st.subheader('📸 กราฟหุ้นที่พบ (AI Match)')
 
         headers = {
-            'User-Agent': (
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            )
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
         best_scores = []
         best_patterns = []
 
-        # สแกนดาวน์โหลดรูปและแสดงผลแบบ Grid บนหน้าเว็บ
-        cols = st.columns(3)  # แสดงรูป 3 คอลัมน์ขนานกัน
+        # กำหนด Grid: 2 คอลัมน์สำหรับจอมือถือ/คอมฯ เพื่อไม่ให้บีบรูปเล็กเกินไป
+        cols = st.columns(2)
         col_idx = 0
 
         for idx, row in df_result.iterrows():
@@ -280,21 +274,16 @@ if st.button('🚀 เริ่มสแกนหุ้นทันที'):
                     with open(chart_path, 'wb') as f:
                         f.write(res.content)
 
-                    score_str, pattern_name = get_best_pattern_match(
-                        chart_path, patterns_folder
-                    )
+                    score_str, pattern_name = get_best_pattern_match(chart_path, patterns_folder)
                     best_scores.append(score_str)
                     best_patterns.append(pattern_name)
 
-                    # แสดงรูปภาพและรายละเอียดบนเว็บ
-                    with cols[col_idx % 3]:
-                        st.image(
-                            chart_path,
-                            caption=(
-                                f'🟢 {ticker} | ราคา: ${row["Price ($)"]}'
-                                f' | คล้าย: {pattern_name} ({score_str})'
-                            ),
-                        )
+                    with cols[col_idx % 2]:
+                        with st.container():
+                            st.image(
+                                chart_path,
+                                caption=f'🟢 {ticker} | ${row["Price ($)"]} | Match: {score_str}'
+                            )
                     col_idx += 1
             except Exception:
                 best_scores.append('0.0%')
@@ -303,17 +292,13 @@ if st.button('🚀 เริ่มสแกนหุ้นทันที'):
         df_result['Best_Match_Score'] = best_scores
         df_result['Matched_Pattern'] = best_patterns
 
-        # แสดงตารางผลลัพธ์
-        st.subheader('📊 ตารางสรุปผลลัพธ์การสแกน')
+        st.subheader('📊 สรุปตารางสัญญาณ')
         st.dataframe(df_result, use_container_width=True)
 
-        # ปุ่มดาวน์โหลดไฟล์ CSV จากหน้าเว็บ
-        csv_bytes = df_result.to_csv(index=False, encoding='utf-8-sig').encode(
-            'utf-8-sig'
-        )
+        csv_bytes = df_result.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
         st.download_button(
-            label='📥 ดาวน์โหลดไฟล์ผลลัพธ์ CSV',
+            label='📥 ดาวน์โหลดไฟล์ CSV',
             data=csv_bytes,
-            file_name=f'web_signals_{time_stamp}.csv',
+            file_name=f'signals_{time_stamp}.csv',
             mime='text/csv',
         )
