@@ -1,0 +1,7 @@
+streamlit
+yfinance
+pandas
+opencv-python-headless
+scikit-image
+requests
+numpy
