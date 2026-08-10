@@ -329,15 +329,15 @@ with tab1:
                             score_str, pattern_name = get_best_pattern_match(
                                 temp_chart_path, patterns_folder
                             )
-
-                            st.image(
-                                temp_chart_path,
-                                caption=(
-                                    f'📸 {single_ticker} | คล้ายรูปแบบ:'
-                                    f' {pattern_name} ({score_str})'
-                                ),
-                                use_column_width=True,
-                            )
+# ค้นหาบรรทัดนี้ใน app.py
+st.image(
+    temp_chart_path,
+    caption=(
+        f'📸 {single_ticker} | คล้ายรูปแบบ:'
+        f' {pattern_name} ({score_str})'
+    ),
+    use_container_width=True, # เปลี่ยนบรรทัดนี้ให้ถูกต้องตามนี้ครับ
+)
                     except Exception as e:
                         st.error(f'ไม่สามารถโหลดกราฟได้: {e}')
                 else:
