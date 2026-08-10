@@ -315,7 +315,6 @@ with tab1:
                         )
                     }
                     chart_url = f'https://charts2.finviz.com/chart.ashx?t={single_ticker}&ty=c&ta=1&p=d&s=l'
-                    time_stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                     temp_chart_path = os.path.join(
                         base_dir, f'{single_ticker}_single_chart.png'
                     )
@@ -329,15 +328,15 @@ with tab1:
                             score_str, pattern_name = get_best_pattern_match(
                                 temp_chart_path, patterns_folder
                             )
-# ค้นหาบรรทัดนี้ใน app.py
-st.image(
-    temp_chart_path,
-    caption=(
-        f'📸 {single_ticker} | คล้ายรูปแบบ:'
-        f' {pattern_name} ({score_str})'
-    ),
-    use_container_width=True, # เปลี่ยนบรรทัดนี้ให้ถูกต้องตามนี้ครับ
-)
+
+                            st.image(
+                                temp_chart_path,
+                                caption=(
+                                    f'📸 {single_ticker} | คล้ายรูปแบบ:'
+                                    f' {pattern_name} ({score_str})'
+                                ),
+                                use_container_width=True,
+                            )
                     except Exception as e:
                         st.error(f'ไม่สามารถโหลดกราฟได้: {e}')
                 else:
