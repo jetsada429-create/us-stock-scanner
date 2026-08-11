@@ -9,8 +9,6 @@ from skimage.metrics import structural_similarity as ssim
 import streamlit as st
 import yfinance as yf
 from sklearn.linear_model import LinearRegression
-
-# --- เพิ่มไลบรารีสำหรับการสร้างกราฟชัดเจน ---
 import plotly.graph_objects as go
 
 # ================= ส่วนตั้งค่าแอปและภาษา =================
@@ -24,7 +22,7 @@ UI_LANG_MAP = {
     'status_scanning': "⏳ สแกนไปแล้ว {count}/{total} ตัว... (อาจใช้เวลานานมาก)",
     'status_analyzing_single': "⏳ กำลังดึงข้อมูลและวิเคราะห์ {ticker}...",
     'success_stock_found_single': "🟢 หุ้น **{ticker}** ผ่านเงื่อนไขสแกนสัญญาณ BUY!",
-    'error_stock_not_found_single': "🔴 หุ้น **{ticker}** ไม่ติดเงื่อนไขสัญญาณซื้อในขณะนี้ (ราคาอาจไม่อยู่ในโซนแนวรับ / ไม่ใช่แท่งงัดกลับตัว / หรือวอลุ่มไม่ถึงเกณฑ์)",
+    'error_stock_not_found_single': "🔴 หุ้น **{ticker}** ไม่ติดเงื่อนไขสัญญาณซื้อในขณะนี้",
     'expander_business_summary': "📖 คลิกเพื่ออ่านสรุปธุรกิจ (แปลไทย)",
     'chart_title_single': "#### 📈 กราฟเทคนิคแนวรับ-แนวต้าน (และเส้นเทรนออโต้)",
     'placeholder_pattern_match': "AI Pattern Match (เบื้องต้น): สร้างฐาน.png (ความแม่นยำ: 75.4%)",
@@ -38,7 +36,6 @@ UI_LANG_MAP = {
     'tab_scan_market': "🚀 สแกนคัดหุ้นทรงสวย",
 }
 
-# 1. ตั้งค่าหน้าเว็บ
 st.set_page_config(
     page_title=UI_LANG_MAP['search_ticker_title'],
     page_icon="📈",
@@ -46,119 +43,66 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# 2. Custom CSS สำหรับปรับหน้าตาให้สวยงามบนมือถือและ Desktop
 st.markdown(
-    f"""
+    """
     <style>
-.block-container {{
-    padding-top: 1rem !important;
-    padding-bottom: 1rem !important;
-    padding-left: 1rem !important;
-    padding-right: 1rem !important;
-}}
-
-.main-title {{
-    font-size: 2rem !important;
-    font-weight: 800 !important;
-    color: #1E293B;
-    text-align: center;
-    margin-bottom: 0.3rem;
-    line-height: 1.3;
-}}
-
-.sub-title {{
-    font-size: 1rem !important;
-    color: #64748B;
-    text-align: center;
-    margin-bottom: 1.5rem;
-}}
-
-.stButton > button {{
-    width: 100% !important;
-    background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
-    color: white !important;
-    font-size: 1.1rem !important;
-    font-weight: 700 !important;
-    padding: 0.75rem 1rem !important;
-    border-radius: 12px !important;
-    border: none !important;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2) !important;
-    transition: all 0.2s ease;
-}}
-
-.stButton > button:hover {{
-    transform: translateY(-2px);
-    box-shadow: 0 6px 15px rgba(37, 99, 235, 0.3) !important;
-}}
-
-.company-name {{
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #1E3A8A;
-    margin-bottom: 0rem;
-}}
-
-.biz-summary {{
-    font-size: 0.9rem;
-    color: #475569;
-    background-color: #F1F5F9;
-    padding: 10px;
-    border-radius: 8px;
-    margin-bottom: 1rem;
-}}
-
-.metric-card {{
-    background-color: white;
-    padding: 15px;
-    border-radius: 10px;
-    border: 1px solid #E2E8F0;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-}}
-
-.metric-label {{
-    font-size: 0.9rem;
-    color: #64748B;
-    font-weight: 600;
-}}
-
-.metric-value {{
-    font-size: 1.5rem;
-    font-weight: 800;
-    color: #1E293B;
-}}
-
-#MainMenu {{visibility: hidden;}}
-footer {{visibility: hidden;}}
-header {{visibility: hidden;}}
-
-@media (max-width: 768px) {{
-    .block-container {{
+    .block-container {
         padding-top: 1rem !important;
-        padding-bottom: 2rem !important;
-        padding-left: 0.5rem !important;
-        padding-right: 0.5rem !important;
-    }}
-    .main-title {{
-        font-size: 1.5rem !important;
-    }}
-    .sub-title {{
-        font-size: 0.8rem !important;
-    }}
-    .company-name {{
-        font-size: 1.2rem !important;
-    }}
-    .metric-card {{
-        padding: 10px !important;
-    }}
-    .metric-label {{
-        font-size: 0.8rem !important;
-    }}
-    .metric-value {{
-        font-size: 1.2rem !important;
-    }}
-}}
-</style>
-""",
+        padding-bottom: 1rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+    .main-title {
+        font-size: 2rem !important;
+        font-weight: 800 !important;
+        color: #1E293B;
+        text-align: center;
+        margin-bottom: 0.3rem;
+        line-height: 1.3;
+    }
+    .sub-title {
+        font-size: 1rem !important;
+        color: #64748B;
+        text-align: center;
+        margin-bottom: 1.5rem;
+    }
+    .stButton > button {
+        width: 100% !important;
+        background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
+        color: white !important;
+        font-size: 1.1rem !important;
+        font-weight: 700 !important;
+        padding: 0.75rem 1rem !important;
+        border-radius: 12px !important;
+        border: none !important;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2) !important;
+    }
+    .company-name {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1E3A8A;
+        margin-bottom: 0rem;
+    }
+    .biz-summary {
+        font-size: 0.9rem;
+        color: #475569;
+        background-color: #F1F5F9;
+        padding: 10px;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+    .metric-card {
+        background-color: white;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #E2E8F0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    </style>
+    """,
     unsafe_allow_html=True,
 )
 
@@ -184,16 +128,16 @@ def get_us_stock_tickers():
         df_nasdaq = pd.read_csv(url_nasdaq, sep='|')
         nasdaq_stocks = df_nasdaq[(df_nasdaq['ETF'] == 'N') & (df_nasdaq['Test Issue'] == 'N')]['Symbol'].dropna().tolist()
         tickers.extend(nasdaq_stocks)
-    except Exception as e:
-        st.error(f"⚠️ ไม่สามารถดึงรายชื่อหุ้น NASDAQ ได้: {e}")
+    except Exception:
+        pass
 
     try:
         url_other = 'ftp://ftp.nasdaqtrader.com/SymbolDirectory/otherlisted.txt'
         df_other = pd.read_csv(url_other, sep='|')
         other_stocks = df_other[(df_other['ETF'] == 'N') & (df_other['Test Issue'] == 'N')]['ACT Symbol'].dropna().tolist()
         tickers.extend(other_stocks)
-    except Exception as e:
-        st.error(f"⚠️ ไม่สามารถดึงรายชื่อหุ้น NYSE/AMEX ได้: {e}")
+    except Exception:
+        pass
 
     cleaned_tickers = [
         str(t).strip().replace('.', '-')
@@ -208,13 +152,9 @@ def get_company_info(ticker):
     try:
         stock = yf.Ticker(ticker)
         info = stock.info
-        english_summary = info.get('longBusinessSummary', 'N/A')
-        company_name = info.get('longName', ticker)
         return {
-            'longNameEn': company_name,
-            'summaryEn': english_summary,
-            'sectorEn': info.get('sector', 'N/A'),
-            'industryEn': info.get('industry', 'N/A')
+            'longNameEn': info.get('longName', ticker),
+            'summaryEn': info.get('longBusinessSummary', 'N/A'),
         }
     except Exception:
         return None
@@ -225,15 +165,13 @@ def get_financials(ticker):
         stock = yf.Ticker(ticker)
         q_financials = stock.quarterly_financials
         if q_financials is not None and 'Net Income' in q_financials.index:
-            net_income = q_financials.loc['Net Income']
-            latest_3q = net_income.head(3)
+            net_income = q_financials.loc['Net Income'].head(3)
             data = []
-            for date, value in latest_3q.items():
+            for date, value in net_income.items():
                 if pd.notna(value):
-                    value_m = value / 1_000_000
                     data.append({
                         'Quarter End': date.strftime('%Y-%m-%d'),
-                        'Net Income (M$)': round(value_m, 2)
+                        'Net Income (M$)': round(value / 1_000_000, 2)
                     })
             if data:
                 return pd.DataFrame(data)
@@ -243,7 +181,7 @@ def get_financials(ticker):
 
 
 def create_ta_chart(df, ticker, res_data):
-    # ปรับชื่อ Legend ของกราฟแท่งเทียนให้ตรงกับรูปภาพ ('ราคา', 'MA20', 'MA50', 'เทรนแนวต้านล่าสุด (40 วัน)', 'เทรนแนวรับล่าสุด (40 วัน)')
+    # กำหนดชื่อใน Legend ให้ตรงกับรูปแบบที่ต้องการ
     fig = go.Figure(data=[go.Candlestick(
         x=df.index,
         open=df['open'], high=df['high'],
@@ -257,7 +195,6 @@ def create_ta_chart(df, ticker, res_data):
     fig.add_trace(go.Scatter(x=df.index, y=fast_ma, line=dict(color='deepskyblue', width=1), name='MA20'))
     fig.add_trace(go.Scatter(x=df.index, y=slow_ma, line=dict(color='orange', width=1), name='MA50'))
 
-    chart_date_range = df.index
     days_for_fit = 40
     end_idx = len(df)
     start_idx = max(0, end_idx - days_for_fit)
@@ -279,25 +216,19 @@ def create_ta_chart(df, ticker, res_data):
     latest_date = df.index[-1]
     earliest_date = df.index[0]
     
+    # เส้นแนวรับ
     sup_val = res_data['Support ($)']
-    fig.add_shape(
-        type="line", x0=earliest_date, y0=sup_val, x1=latest_date, y1=sup_val,
-        line=dict(color="green", width=3, dash='dash')
-    )
+    fig.add_shape(type="line", x0=earliest_date, y0=sup_val, x1=latest_date, y1=sup_val, line=dict(color="green", width=3, dash='dash'))
     fig.add_annotation(x=latest_date, y=sup_val, text=f"Support: ${sup_val}", bgcolor="green", font=dict(color="white"), ax=0, ay=-15)
 
+    # เส้นแนวต้าน 1
     res1_val = res_data['Resist 1 ($)']
-    fig.add_shape(
-        type="line", x0=earliest_date, y0=res1_val, x1=latest_date, y1=res1_val,
-        line=dict(color="red", width=2, dash='dash')
-    )
+    fig.add_shape(type="line", x0=earliest_date, y0=res1_val, x1=latest_date, y1=res1_val, line=dict(color="red", width=2, dash='dash'))
     fig.add_annotation(x=latest_date, y=res1_val, text=f"Resist 1: ${res1_val}", bgcolor="red", font=dict(color="white"), ax=0, ay=-15)
 
+    # เส้นแนวต้าน 2
     res2_val = res_data['Resist 2 ($)']
-    fig.add_shape(
-        type="line", x0=earliest_date, y0=res2_val, x1=latest_date, y1=res2_val,
-        line=dict(color="darkred", width=3)
-    )
+    fig.add_shape(type="line", x0=earliest_date, y0=res2_val, x1=latest_date, y1=res2_val, line=dict(color="darkred", width=3))
     fig.add_annotation(x=latest_date, y=res2_val, text=f"Resist 2: ${res2_val}", bgcolor="darkred", font=dict(color="white"), ax=0, ay=15)
 
     fig.update_layout(
@@ -315,44 +246,31 @@ def check_ma_snr_combo(ticker, info_mode=False):
     try:
         stock = yf.Ticker(ticker)
         df = stock.history(period='6mo', interval='1d')
-
         if len(df) < 60 or df['Close'].iloc[-1] < 0.5:
             return None, df
 
         df.columns = [col.lower() for col in df.columns]
-
-        fast_ma = df['close'].rolling(window=20).mean()
-        slow_ma = df['close'].rolling(window=50).mean()
         latest_close = df['close'].iloc[-1]
+        slow_ma = df['close'].rolling(window=50).mean()
 
         lookback_sup = df.tail(20)
         support_level = lookback_sup['low'].min()
-
         resistance_1 = lookback_sup['high'].max()
+        
         lookback_res2 = df.iloc[-61:-1]
         resistance_2 = lookback_res2['high'].max()
-        
         if resistance_2 <= resistance_1 * 1.01:
              early_lookback = df.iloc[-61:-21]
-             if not early_lookback.empty:
-                 resistance_2 = early_lookback['high'].max()
-             else:
-                 resistance_2 = resistance_1 * 1.10
+             resistance_2 = early_lookback['high'].max() if not early_lookback.empty else resistance_1 * 1.10
 
         recent_3d_low = df['low'].tail(3).min()
-        latest_open = df['open'].iloc[-1]
-        latest_vol = df['volume'].iloc[-1]
-
         near_support = recent_3d_low <= (support_level * 1.05)
         near_ma50 = recent_3d_low <= (slow_ma.iloc[-1] * 1.02)
 
         if not (near_support or near_ma50):
             return None, df
 
-        is_green = latest_close > latest_open
-        has_vol = latest_vol >= 200_000
-
-        if is_green and has_vol:
+        if latest_close > df['open'].iloc[-1] and df['volume'].iloc[-1] >= 200_000:
             dist_from_sup = ((latest_close - support_level) / support_level) * 100
             res_data = {
                 'Ticker': ticker,
@@ -361,35 +279,25 @@ def check_ma_snr_combo(ticker, info_mode=False):
                 'Resist 1 ($)': round(resistance_1, 2),
                 'Resist 2 ($)': round(resistance_2, 2),
                 'Dist_Sup (%)': f'+{dist_from_sup:.2f}%',
-                'Volume': f"{latest_vol:,.0f}",
+                'Volume': f"{df['volume'].iloc[-1]:,.0f}",
                 'Date': df.index[-1].strftime('%Y-%m-%d'),
             }
-            
             if info_mode:
-                co_info_dict = get_company_info(ticker)
-                if co_info_dict:
-                    res_data['longName'] = co_info_dict['longNameEn']
-                    res_data['summary'] = co_info_dict['summaryEn']
-            
+                co_info = get_company_info(ticker)
+                if co_info:
+                    res_data['longName'] = co_info['longNameEn']
+                    res_data['summary'] = co_info['summaryEn']
             return res_data, df
-            
     except Exception:
         pass
     return None, None
 
-
-base_dir = get_base_directory()
-patterns_folder = os.path.join(base_dir, 'patterns')
-csv_folder = os.path.join(base_dir, 'csv')
-os.makedirs(patterns_folder, exist_ok=True)
-os.makedirs(csv_folder, exist_ok=True)
 
 tab1, tab2 = st.tabs([UI_LANG_MAP['tab_search_ticker'], UI_LANG_MAP['tab_scan_market']])
 
 # ================= TAB 1: ค้นหาหุ้นรายตัว =================
 with tab1:
     st.markdown("### 🔍 ตรวจสอบสัญญาณเทคนิคและพื้นฐานรายตัว")
-    
     col_in1, col_in2 = st.columns([3, 1])
     with col_in1:
         single_ticker = st.text_input(UI_LANG_MAP['search_ticker_label'], value='').strip().upper()
@@ -406,7 +314,7 @@ with tab1:
                 st.markdown(f'<p class="company-name">{res.get("longName", "N/A")}</p>', unsafe_allow_html=True)
                 st.success(UI_LANG_MAP['success_stock_found_single'].format(ticker=single_ticker) + f' | ข้อมูล ณ วันที่: {res["Date"]}')
                 
-                # กราฟเทคนิคขึ้นมาไว้บนสุด
+                # กราฟเทคนิคแสดงไว้บนสุดทันทีตามต้องการ
                 if raw_df is not None:
                     st.markdown(UI_LANG_MAP['chart_title_single'])
                     fig = create_ta_chart(raw_df, single_ticker, res)
@@ -414,18 +322,14 @@ with tab1:
                     st.info(f"🤖 {UI_LANG_MAP['placeholder_pattern_match']}")
 
                 st.markdown("---")
-
-                # Metric Cards และข้อมูลกำไร
                 st.markdown(UI_LANG_MAP['analysis_title'])
                 with st.container():
                     st.markdown('<div class="metric-card">', unsafe_allow_html=True)
                     m1, m2 = st.columns(2)
                     m1.metric(UI_LANG_MAP['metric_current_price'], f"${res['Price ($)']}")
-
                     st.markdown("---")
                     s1, s2 = st.columns(2)
-                    s1.metric(UI_LANG_MAP['metric_support_level'], f"${res['Support ($)']}", f"{res['Dist_Sup (%)']} จากราคาปัจจุบัน", delta_color="normal")
-                    
+                    s1.metric(UI_LANG_MAP['metric_support_level'], f"${res['Support ($)']}", f"{res['Dist_Sup (%)']} จากราคาปัจจุบัน")
                     st.markdown("<br>", unsafe_allow_html=True)
                     r1, r2 = st.columns(2)
                     r1.metric(UI_LANG_MAP['metric_resistance_1'], f"${res['Resist 1 ($)']}")
@@ -441,28 +345,11 @@ with tab1:
                     st.warning("ไม่พบข้อมูลกำไรสุทธิย้อนหลัง")
 
                 st.markdown("---")
-
-                english_summary = res.get('summary', 'N/A')
                 with st.expander(UI_LANG_MAP['expander_business_summary'], expanded=True):
-                    if english_summary != 'N/A':
-                         st.markdown(f'<div class="biz-summary"><b>[Translated Business Summary (ไทยออโต้)]</b><br>{english_summary}</div>', unsafe_allow_html=True)
-                    else:
-                         st.warning("⚠️ ไม่พบข้อมูลสรุปธุรกิจสำหรับหุ้นตัวนี้")
-
+                    if res.get('summary') != 'N/A':
+                         st.markdown(f'<div class="biz-summary"><b>[Translated Business Summary (ไทยออโต้)]</b><br>{res.get("summary")}</div>', unsafe_allow_html=True)
             else:
                 st.error(UI_LANG_MAP['error_stock_not_found_single'].format(ticker=single_ticker))
-                co_info_dict_found = get_company_info(single_ticker)
-                if co_info_dict_found:
-                    st.markdown(f'---')
-                    st.markdown(f'#### รีวิวข้อมูลพื้นฐานของ {co_info_dict_found["longNameEn"]}:')
-                    if df_profit is not None:
-                        st.dataframe(df_profit, hide_index=True)
-                    with st.expander(UI_LANG_MAP['expander_business_summary'], expanded=True):
-                         if co_info_dict_found["summaryEn"] != 'N/A':
-                             st.markdown(f'<div class="biz-summary"><b>[Business Summary (EN)]</b><br>{co_info_dict_found["summaryEn"]}</div>', unsafe_allow_html=True)
-
-    elif search_btn and not single_ticker:
-        st.warning('⚠️ กรุณากรอกชื่อสัญลักษณ์หุ้นก่อนครับ')
 
 
 # ================= TAB 2: สแกนคัดหุ้นทั้งตลาด =================
@@ -473,7 +360,6 @@ with tab2:
     if scan_btn:
         status_text = st.empty()
         status_text.info(UI_LANG_MAP['status_preparing_tickers'])
-        
         stock_list = get_us_stock_tickers()
         total_stocks = len(stock_list)
         progress_bar = st.progress(0)
@@ -483,13 +369,11 @@ with tab2:
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
             futures = {executor.submit(check_ma_snr_combo, ticker, False): ticker for ticker in stock_list}
-
             for future in concurrent.futures.as_completed(futures):
                 count += 1
                 if count % 20 == 0 or count == total_stocks:
                     progress_bar.progress(count / total_stocks)
                     status_text.text(UI_LANG_MAP['status_scanning'].format(count=count, total=total_stocks))
-                
                 try:
                     res_data_found, raw_df_found = future.result()
                     if res_data_found:
@@ -498,47 +382,34 @@ with tab2:
                     pass
 
         status_text.empty()
-        st.success(f'✅ สแกนเสร็จสิ้น! พบหุ้นทรงสวยเข้าเงื่อนไขทั้งหมด {len(results)} ตัว จากการตรวจสอบทั้งตลาด {total_stocks} ตัว')
+        st.success(f'✅ สแกนเสร็จสิ้น! พบหุ้นทรงสวยเข้าเงื่อนไขทั้งหมด {len(results)} ตัว')
 
         if results:
-            results_data_only = [item['res_data'] for item in results]
-            df_result = pd.DataFrame(results_data_only)
-            cols_order_Th = ['Ticker', 'Price ($)', 'Support ($)', 'Dist_Sup (%)', 'Resist 1 ($)', 'Resist 2 ($)', 'Volume', 'Date']
-            df_result_display = df_result[cols_order_Th]
-
-            # แกลเลอรี่กราฟหุ้นขึ้นมาไว้บนสุดทันทีหลังสแกนเสร็จ
+            df_result_display = pd.DataFrame([item['res_data'] for item in results])[['Ticker', 'Price ($)', 'Support ($)', 'Dist_Sup (%)', 'Resist 1 ($)', 'Resist 2 ($)', 'Volume', 'Date']]
+            
             st.markdown("---")
             st.subheader('📸 แกลเลอรี่กราฟหุ้นทรงสวย (แสดงผลบนสุด)')
-            
-            time_stamp_scan = datetime.now().strftime('%Y%m%d_%H%M%S')
             cols = st.columns(2)
             col_idx = 0
 
             with st.spinner('กำลังวาดกราฟเทคนิคสำหรับแกลเลอรี่...'):
                 for idx, item in df_result_display.iterrows():
                     ticker_found = item['Ticker']
-                    match_item_found = next(x for x in results if x['res_data']['Ticker'] == ticker_found)
-                    raw_df_found_gallery = match_item_found['raw_df']
-                    res_data_found_gallery = match_item_found['res_data']
-
-                    if raw_df_found_gallery is not None:
-                        fig_gallery_charted = create_ta_chart(raw_df_found_gallery, ticker_found, res_data_found_gallery)
+                    match_item = next(x for x in results if x['res_data']['Ticker'] == ticker_found)
+                    if match_item['raw_df'] is not None:
+                        fig_gallery = create_ta_chart(match_item['raw_df'], ticker_found, match_item['res_data'])
                         with cols[col_idx % 2]:
-                            with st.container():
-                                st.markdown(f'<p style="font-size:1.2rem; font-weight:bold; color:#1D4ED8; margin-bottom:0px;">🟢 {ticker_found} | Price: ${res_data_found_gallery["Price ($)"]}</p>', unsafe_allow_html=True)
-                                st.caption(f"Support: ${res_data_found_gallery['Support ($)']} | ต้าน1: ${res_data_found_gallery['Resist 1 ($)']} | ต้าน2: ${res_data_found_gallery['Resist 2 ($)']}")
-                                st.plotly_chart(fig_gallery_charted, use_container_width=True)
-                                st.markdown("<br>", unsafe_allow_html=True)
+                            st.markdown(f'<p style="font-size:1.2rem; font-weight:bold; color:#1D4ED8; margin-bottom:0px;">🟢 {ticker_found} | Price: ${match_item["res_data"]["Price ($)"]}</p>', unsafe_allow_html=True)
+                            st.caption(f"Support: ${match_item['res_data']['Support ($)']} | ต้าน1: ${match_item['res_data']['Resist 1 ($)']} | ต้าน2: ${match_item['res_data']['Resist 2 ($)']}")
+                            st.plotly_chart(fig_gallery, use_container_width=True)
+                            st.markdown("<br>", unsafe_allow_html=True)
                             col_idx += 1
 
-            # ตารางสรุปอยู่ด้านล่าง
             st.markdown("---")
             st.markdown("#### 📊 ตารางสรุปสัญญาณราคาและแนวรับ-ต้าน")
             st.dataframe(df_result_display, use_container_width=True, hide_index=True)
-
-            csv_bytes_scan = df_result_display.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
             st.download_button(
                 label='📥 ดาวน์โหลด Watchlist วันนี้ (CSV)',
-                data=csv_bytes_scan,
-                file_name=f'us_watchlist_{time_stamp_scan}.csv',
+                data=df_result_display.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig'),
+                file_name=f'us_watchlist_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv',
             )
