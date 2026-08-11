@@ -24,7 +24,7 @@ UI_LANG_MAP = {
     'status_analyzing_single': "⏳ กำลังดึงข้อมูลและวิเคราะห์ {ticker}...",
     'success_stock_found_single': "🟢 หุ้น **{ticker}** ผ่านเงื่อนไขสแกนสัญญาณ BUY!",
     'error_stock_not_found_single': "🔴 หุ้น **{ticker}** ไม่ติดเงื่อนไขสัญญาณซื้อในขณะนี้",
-    'expander_business_summary': "📖 คลิกเพื่ออ่านสรุปธุรกิจ (แปลไทยอัตโนมัติ)",
+    'expander_business_summary': "📖 สรุปธุรกิจ (แปลไทยอัตโนมัติ)",
     'chart_title_single': "#### 📈 กราฟเทคนิคแนวรับ-แนวต้าน (และเส้นเทรนออโต้)",
     'placeholder_pattern_match': "AI Pattern Match (เบื้องต้น): สร้างฐาน.png (ความแม่นยำ: 75.4%)",
     'analysis_title': "#### 📊 ข้อมูลวิเคราะห์",
@@ -48,62 +48,85 @@ st.markdown(
     """
     <style>
     .block-container {
-        padding-top: 1rem !important;
-        padding-bottom: 1rem !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
+        padding-top: 0.5rem !important;
+        padding-bottom: 0.5rem !important;
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
     }
     .main-title {
-        font-size: 2rem !important;
+        font-size: 1.5rem !important;
         font-weight: 800 !important;
         color: #1E293B;
         text-align: center;
-        margin-bottom: 0.3rem;
-        line-height: 1.3;
+        margin-bottom: 0.2rem;
+        line-height: 1.2;
     }
     .sub-title {
-        font-size: 1rem !important;
+        font-size: 0.85rem !important;
         color: #64748B;
         text-align: center;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1rem;
     }
     .stButton > button {
         width: 100% !important;
         background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
         color: white !important;
-        font-size: 1.1rem !important;
+        font-size: 0.95rem !important;
         font-weight: 700 !important;
-        padding: 0.75rem 1rem !important;
-        border-radius: 12px !important;
+        padding: 0.4rem 0.8rem !important;
+        border-radius: 8px !important;
         border: none !important;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2) !important;
+        box-shadow: 0 2px 6px rgba(37, 99, 235, 0.2) !important;
     }
     .company-name {
-        font-size: 1.5rem;
+        font-size: 1.2rem !important;
         font-weight: 700;
         color: #1E3A8A;
         margin-bottom: 0rem;
     }
-    .biz-summary {
-        font-size: 0.95rem;
-        color: #334155;
-        background-color: #F8FAFC;
-        padding: 12px;
-        border-radius: 8px;
-        border-left: 4px solid #2563EB;
-        margin-bottom: 1rem;
-        line-height: 1.6;
+    
+    /* --- ปรับส่วนหัวข้อและกล่องข้อมูลให้เล็กลงครึ่งหนึ่ง --- */
+    h3 {
+        font-size: 1.1rem !important;
+        margin-top: 0.3rem !important;
+        margin-bottom: 0.3rem !important;
+    }
+    h4 {
+        font-size: 0.95rem !important;
+        margin-top: 0.2rem !important;
+        margin-bottom: 0.2rem !important;
     }
     .metric-card {
         background-color: white;
-        padding: 15px;
-        border-radius: 10px;
+        padding: 8px !important;
+        border-radius: 6px !important;
         border: 1px solid #E2E8F0;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        margin-bottom: 0.5rem;
     }
+    .biz-summary {
+        font-size: 0.8rem !important;
+        color: #334155;
+        background-color: #F8FAFC;
+        padding: 8px !important;
+        border-radius: 6px;
+        border-left: 3px solid #2563EB;
+        margin-bottom: 0.5rem;
+        line-height: 1.4;
+    }
+    
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
+
+    @media (max-width: 768px) {
+        .block-container {
+            padding-top: 0.5rem !important;
+            padding-bottom: 1rem !important;
+            padding-left: 0.3rem !important;
+            padding-right: 0.3rem !important;
+        }
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -151,7 +174,6 @@ def get_us_stock_tickers():
 
 
 def translate_text_to_thai(text):
-    """ฟังก์ชันแปลข้อความอังกฤษเป็นไทยอัตโนมัติแบบเสถียร (ใช้ Google Translate API)"""
     if not text or text == 'N/A':
         return 'N/A'
     try:
@@ -260,7 +282,7 @@ def create_ta_chart(df, ticker, res_data):
         title=f'กราฟเทคนิค {ticker} | ราคา: ${res_data["Price ($)"]}',
         xaxis_rangeslider_visible=False,
         template='plotly_white',
-        margin=dict(l=20, r=20, t=40, b=20),
+        margin=dict(l=10, r=10, t=30, b=10),
         xaxis_title="วันที่",
         yaxis_title="ราคา ($)",
         showlegend=False
@@ -340,6 +362,7 @@ with tab1:
                 st.markdown(f'<p class="company-name">{res.get("longName", "N/A")}</p>', unsafe_allow_html=True)
                 st.success(UI_LANG_MAP['success_stock_found_single'].format(ticker=single_ticker) + f' | ข้อมูล ณ วันที่: {res["Date"]}')
                 
+                # กราฟขึ้นมาแสดงบนสุดทันที
                 if raw_df is not None:
                     st.markdown(UI_LANG_MAP['chart_title_single'])
                     fig = create_ta_chart(raw_df, single_ticker, res)
@@ -427,7 +450,7 @@ with tab2:
                     if match_item['raw_df'] is not None:
                         fig_gallery = create_ta_chart(match_item['raw_df'], ticker_found, match_item['res_data'])
                         with cols[col_idx % 2]:
-                            st.markdown(f'<p style="font-size:1.2rem; font-weight:bold; color:#1D4ED8; margin-bottom:0px;">🟢 {ticker_found} | Price: ${match_item["res_data"]["Price ($)"]}</p>', unsafe_allow_html=True)
+                            st.markdown(f'<p style="font-size:1.1rem; font-weight:bold; color:#1D4ED8; margin-bottom:0px;">🟢 {ticker_found} | Price: ${match_item["res_data"]["Price ($)"]}</p>', unsafe_allow_html=True)
                             st.caption(f"Support: ${match_item['res_data']['Support ($)']} | ต้าน1: ${match_item['res_data']['Resist 1 ($)']} | ต้าน2: ${match_item['res_data']['Resist 2 ($)']}")
                             st.plotly_chart(fig_gallery, use_container_width=True)
                             st.markdown("<br>", unsafe_allow_html=True)
