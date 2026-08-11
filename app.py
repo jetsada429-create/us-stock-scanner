@@ -11,6 +11,13 @@ import yfinance as yf
 from sklearn.linear_model import LinearRegression
 import plotly.graph_objects as go
 
+# พยายามนำเข้าตัวแปลภาษาอัตโนมัติ
+try:
+    from deep_translator import GoogleTranslator
+    HAS_TRANSLATOR = True
+except ImportError:
+    HAS_TRANSLATOR = False
+
 # ================= ส่วนตั้งค่าแอปและภาษา =================
 UI_LANG_MAP = {
     'search_ticker_title': "US Stock Scanner PRO",
@@ -19,11 +26,11 @@ UI_LANG_MAP = {
     'btn_analyze_single': "🔎 วิเคราะห์ทันที",
     'btn_scan_market': "🚀 เริ่มสแกนทั้ง 3 ตลาด (7,000+ หุ้น)",
     'status_preparing_tickers': "⏳ กำลังดึงรายชื่อหุ้นทั้งหมดจาก NASDAQ, NYSE, AMEX...",
-    'status_scanning': "⏳ สแกนไปแล้ว {count}/{total} ตัว... (อาจใช้เวลานานมาก)",
+    'status_scanning': "⏳ สแกนไปแล้ว {count}/{total} ตัว...",
     'status_analyzing_single': "⏳ กำลังดึงข้อมูลและวิเคราะห์ {ticker}...",
     'success_stock_found_single': "🟢 หุ้น **{ticker}** ผ่านเงื่อนไขสแกนสัญญาณ BUY!",
     'error_stock_not_found_single': "🔴 หุ้น **{ticker}** ไม่ติดเงื่อนไขสัญญาณซื้อในขณะนี้",
-    'expander_business_summary': "📖 คลิกเพื่ออ่านสรุปธุรกิจ (แปลไทย)",
+    'expander_business_summary': "📖 คลิกเพื่ออ่านสรุปธุรกิจ (แปลไทยอัตโนมัติ)",
     'chart_title_single': "#### 📈 กราฟเทคนิคแนวรับ-แนวต้าน (และเส้นเทรนออโต้)",
     'placeholder_pattern_match': "AI Pattern Match (เบื้องต้น): สร้างฐาน.png (ความแม่นยำ: 75.4%)",
     'analysis_title': "#### 📊 ข้อมูลวิเคราะห์",
@@ -84,12 +91,14 @@ st.markdown(
         margin-bottom: 0rem;
     }
     .biz-summary {
-        font-size: 0.9rem;
-        color: #475569;
-        background-color: #F1F5F9;
-        padding: 10px;
+        font-size: 0.95rem;
+        color: #334155;
+        background-color: #F8FAFC;
+        padding: 12px;
         border-radius: 8px;
+        border-left: 4px solid #2563EB;
         margin-bottom: 1rem;
+        line-height: 1.6;
     }
     .metric-card {
         background-color: white;
@@ -147,14 +156,30 @@ def get_us_stock_tickers():
     return sorted(list(set(cleaned_tickers)))
 
 
+def translate_text_to_thai(text):
+    """ฟังก์ชันแปลข้อความภาษาอังกฤษเป็นไทยอัตโนมัติ"""
+    if not text or text == 'N/A':
+        return 'N/A'
+    if HAS_TRANSLATOR:
+        try:
+            # Google Translator รองรับข้อความยาวระดับนึง หากยาวเกินไปตัดแบ่งหรือแปลตรงๆ
+            translated = GoogleTranslator(source='en', target='th').translate(text)
+            return translated if translated else text
+        except Exception:
+            return text
+    return text
+
+
 @st.cache_data(ttl=3600)
 def get_company_info(ticker):
     try:
         stock = yf.Ticker(ticker)
         info = stock.info
+        eng_summary = info.get('longBusinessSummary', 'N/A')
+        th_summary = translate_text_to_thai(eng_summary) if eng_summary != 'N/A' else 'N/A'
         return {
             'longNameEn': info.get('longName', ticker),
-            'summaryEn': info.get('longBusinessSummary', 'N/A'),
+            'summaryTh': th_summary,
         }
     except Exception:
         return None
@@ -234,7 +259,7 @@ def create_ta_chart(df, ticker, res_data):
         margin=dict(l=20, r=20, t=40, b=20),
         xaxis_title="วันที่",
         yaxis_title="ราคา ($)",
-        showlegend=False  # <--- เพิ่มคำสั่งนี้เพื่อซ่อนกล่องป้ายกำกับ (Legend) ออกจากกราฟ
+        showlegend=False  # ซ่อนกล่องป้ายกำกับ (Legend) เรียบร้อย
     )
     return fig
 
@@ -283,7 +308,7 @@ def check_ma_snr_combo(ticker, info_mode=False):
                 co_info = get_company_info(ticker)
                 if co_info:
                     res_data['longName'] = co_info['longNameEn']
-                    res_data['summary'] = co_info['summaryEn']
+                    res_data['summaryTh'] = co_info['summaryTh']
             return res_data, df
     except Exception:
         pass
@@ -311,6 +336,7 @@ with tab1:
                 st.markdown(f'<p class="company-name">{res.get("longName", "N/A")}</p>', unsafe_allow_html=True)
                 st.success(UI_LANG_MAP['success_stock_found_single'].format(ticker=single_ticker) + f' | ข้อมูล ณ วันที่: {res["Date"]}')
                 
+                # กราฟขึ้นมาแสดงบนสุดทันที
                 if raw_df is not None:
                     st.markdown(UI_LANG_MAP['chart_title_single'])
                     fig = create_ta_chart(raw_df, single_ticker, res)
@@ -341,9 +367,13 @@ with tab1:
                     st.warning("ไม่พบข้อมูลกำไรสุทธิย้อนหลัง")
 
                 st.markdown("---")
+                # ส่วนแสดงสรุปธุรกิจแปลไทยอัตโนมัติ
+                summary_text = res.get('summaryTh', 'N/A')
                 with st.expander(UI_LANG_MAP['expander_business_summary'], expanded=True):
-                    if res.get('summary') != 'N/A':
-                         st.markdown(f'<div class="biz-summary"><b>[Translated Business Summary (ไทยออโต้)]</b><br>{res.get("summary")}</div>', unsafe_allow_html=True)
+                    if summary_text != 'N/A':
+                         st.markdown(f'<div class="biz-summary"><b>[สรุปธุรกิจแปลไทยอัตโนมัติ]</b><br>{summary_text}</div>', unsafe_allow_html=True)
+                    else:
+                         st.warning("⚠️ ไม่พบข้อมูลสรุปธุรกิจสำหรับหุ้นตัวนี้")
             else:
                 st.error(UI_LANG_MAP['error_stock_not_found_single'].format(ticker=single_ticker))
 
