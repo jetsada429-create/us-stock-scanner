@@ -528,7 +528,7 @@ with tab1:
                                 st.markdown(f'<p class="company-name">{res.get("longName", "N/A")}</p>', unsafe_allow_html=True)
                                 st.success(UI_LANG_MAP['success_stock_found_single'].format(ticker=single_ticker) + f' | ข้อมูล ณ วันที่: {res["Date"]}')
 
-                # แบ่ง Col หลัก: ซ้าย (ข้อมูล) | ขวา (กราฟ)
+               # แบ่ง Col หลัก: ซ้าย (ข้อมูล) | ขวา (กราฟ)
                 col_info, col_chart = st.columns([1, 2])
                 
                 with col_chart:
@@ -543,8 +543,9 @@ with tab1:
 
                     # --- Placeholder AI Match ตามคำขอ ---
                     # เราจะไม่แสดง AI Match Score จริงจาก SSIM แต่แสดง Placeholder ตามคำขอผู้ใช้
+                    
+                    # *** แก้ไข: ปรับย่อหน้าบรรทัดนี้ให้ตรงกับคอมเมนต์ด้านบน ***
                     st.info(f"🤖 {UI_LANG_MAP['placeholder_pattern_match']}")
-                            
 
                 with col_info:
                     st.markdown(UI_LANG_MAP['analysis_title'])
