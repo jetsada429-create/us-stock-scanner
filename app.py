@@ -1,3 +1,4 @@
+
 import concurrent.futures
 from datetime import datetime
 import os
@@ -10,13 +11,6 @@ import streamlit as st
 import yfinance as yf
 from sklearn.linear_model import LinearRegression
 import plotly.graph_objects as go
-
-# พยายามนำเข้าตัวแปลภาษาอัตโนมัติ
-try:
-    from deep_translator import GoogleTranslator
-    HAS_TRANSLATOR = True
-except ImportError:
-    HAS_TRANSLATOR = False
 
 # ================= ส่วนตั้งค่าแอปและภาษา =================
 UI_LANG_MAP = {
@@ -157,16 +151,26 @@ def get_us_stock_tickers():
 
 
 def translate_text_to_thai(text):
-    """ฟังก์ชันแปลข้อความภาษาอังกฤษเป็นไทยอัตโนมัติ"""
+    """ฟังก์ชันแปลข้อความอังกฤษเป็นไทยอัตโนมัติแบบเสถียร (ใช้ Google Translate API)"""
     if not text or text == 'N/A':
         return 'N/A'
-    if HAS_TRANSLATOR:
-        try:
-            # Google Translator รองรับข้อความยาวระดับนึง หากยาวเกินไปตัดแบ่งหรือแปลตรงๆ
-            translated = GoogleTranslator(source='en', target='th').translate(text)
-            return translated if translated else text
-        except Exception:
-            return text
+    try:
+        url = "https://translate.googleapis.com/translate_a/single"
+        params = {
+            "client": "gtx",
+            "sl": "en",
+            "tl": "th",
+            "dt": "t",
+            "q": text
+        }
+        response = requests.get(url, params=params, timeout=5)
+        if response.status_code == 200:
+            res_json = response.json()
+            translated_text = "".join([item[0] for item in res_json[0] if item[0]])
+            if translated_text:
+                return translated_text
+    except Exception:
+        pass
     return text
 
 
@@ -259,7 +263,7 @@ def create_ta_chart(df, ticker, res_data):
         margin=dict(l=20, r=20, t=40, b=20),
         xaxis_title="วันที่",
         yaxis_title="ราคา ($)",
-        showlegend=False  # ซ่อนกล่องป้ายกำกับ (Legend) เรียบร้อย
+        showlegend=False
     )
     return fig
 
@@ -336,7 +340,6 @@ with tab1:
                 st.markdown(f'<p class="company-name">{res.get("longName", "N/A")}</p>', unsafe_allow_html=True)
                 st.success(UI_LANG_MAP['success_stock_found_single'].format(ticker=single_ticker) + f' | ข้อมูล ณ วันที่: {res["Date"]}')
                 
-                # กราฟขึ้นมาแสดงบนสุดทันที
                 if raw_df is not None:
                     st.markdown(UI_LANG_MAP['chart_title_single'])
                     fig = create_ta_chart(raw_df, single_ticker, res)
@@ -367,7 +370,6 @@ with tab1:
                     st.warning("ไม่พบข้อมูลกำไรสุทธิย้อนหลัง")
 
                 st.markdown("---")
-                # ส่วนแสดงสรุปธุรกิจแปลไทยอัตโนมัติ
                 summary_text = res.get('summaryTh', 'N/A')
                 with st.expander(UI_LANG_MAP['expander_business_summary'], expanded=True):
                     if summary_text != 'N/A':
