@@ -1,4 +1,3 @@
-
 import concurrent.futures
 from datetime import datetime
 import os
@@ -21,9 +20,9 @@ UI_LANG_MAP = {
     'search_ticker_subtitle': "ระบบสแกนทางเทคนิค พร้อมกราฟเทคนิคและข้อมูลธุรกิจแปลไทย",
     'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB):",
     'btn_analyze_single': "🔎 วิเคราะห์ทันที",
-    'btn_scan_market': "🚀 เริ่มสแกน Watchlist ทันที",
-    'status_preparing_tickers': "⏳ กำลังรวบรวมรายชื่อหุ้น...",
-    'status_scanning': "⏳ สแกนไปแล้ว {count}/{total} ตัว...",
+    'btn_scan_market': "🚀 เริ่มสแกนทั้ง 3 ตลาด (7,000+ หุ้น)",
+    'status_preparing_tickers': "⏳ กำลังดึงรายชื่อหุ้นทั้งหมดจาก NASDAQ, NYSE, AMEX...",
+    'status_scanning': "⏳ สแกนไปแล้ว {count}/{total} ตัว... (อาจใช้เวลานานมาก)",
     'status_analyzing_single': "⏳ กำลังดึงข้อมูลและวิเคราะห์ {ticker}...",
     'success_stock_found_single': "🟢 หุ้น **{ticker}** ผ่านเงื่อนไขสแกนสัญญาณ BUY!",
     'error_stock_not_found_single': "🔴 หุ้น **{ticker}** ไม่ติดเงื่อนไขสัญญาณซื้อในขณะนี้ (ราคาอาจไม่อยู่ในโซนแนวรับ / ไม่ใช่แท่งงัดกลับตัว / หรือวอลุ่มไม่ถึงเกณฑ์)",
@@ -49,7 +48,6 @@ st.set_page_config(
 )
 
 # 2. Custom CSS สำหรับปรับหน้าตาให้สวยงามบนมือถือและ Desktop และจัด UI มือถือให้ดีขึ้น
-# ปรับ padding และขนาด font ให้เหมาะสมกับมือถือ
 st.markdown(
     f"""
     <style>
@@ -138,7 +136,6 @@ st.markdown(
 footer {{visibility: hidden;}}
 header {{visibility: hidden;}}
 
-
 /* 2. Responsive UI สำหรับมือถือ (Responsive Styles) */
 /* แนะนำให้วางไว้ด้านล่างสุด เพื่อให้เขียนทับสไตล์พื้นฐานด้านบนเมื่อเปิดในมือถือ */
 @media (max-width: 768px) {{
@@ -193,30 +190,43 @@ def get_base_directory():
     return os.getcwd()
 
 
+# ============================================================
+# *** ✅ เปิดการใช้งานการสแกนทั้ง 3 ตลาดพร้อมกัน (7,000+ หุ้น) ***
+# ============================================================
+@st.cache_data(ttl=86400) # Cache รายชื่อหุ้น 24 ชั่วโมง เพื่อความเร็วในการรันครั้งถัดไป
 def get_us_stock_tickers():
-    # รายชื่อหุ้นแนะนำเริ่มต้น
-    tickers = [
-        'AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA', 'AVGO', 'AMD', 'NFLX',
-        'COST', 'PEP', 'ADBE', 'CSCO', 'TMUS', 'INTC', 'CMCSA', 'QCOM', 'TXN', 'AMAT',
-        'HON', 'AMGN', 'SBUX', 'BKNG', 'GILD', 'MDLZ', 'ADP', 'ADI', 'VRTX', 'REGN',
-        'RKLB', 'IREN', 'EOSE', 'CRWV', 'NUAI', 'WDC', 'PLTR', 'SOUN', 'BBAI', 'IONQ',
-        'RGTI', 'QUBT', 'ASTS', 'LUNR', 'JOBY', 'ACHR', 'MARA', 'RIOT', 'CLSK', 'CIFR'
-    ]
-    # ส่วนดึงข้อมูลจาก FTP (เปิดคอมเม้นต์หากต้องการสแกนทั้งตลาดจริง แต่จะช้ามากในการรันครั้งแรก)
-    # try:
-    #     url_nasdaq = 'ftp://ftp.nasdaqtrader.com/SymbolDirectory/nasdaqlisted.txt'
-    #     df_nasdaq = pd.read_csv(url_nasdaq, sep='|')
-    #     nasdaq_stocks = df_nasdaq[(df_nasdaq['ETF'] == 'N') & (df_nasdaq['Test Issue'] == 'N')]['Symbol'].tolist()
-    #     tickers.extend(nasdaq_stocks)
-    # except Exception:
-    #     pass
+    """ดึงรายชื่อหุ้นทั้งหมดจาก NASDAQ, NYSE, AMEX ผ่าน FTP"""
+    tickers = []
+    
+    # 1. ดึงหุ้น NASDAQ
+    try:
+        url_nasdaq = 'ftp://ftp.nasdaqtrader.com/SymbolDirectory/nasdaqlisted.txt'
+        df_nasdaq = pd.read_csv(url_nasdaq, sep='|')
+        nasdaq_stocks = df_nasdaq[(df_nasdaq['ETF'] == 'N') & (df_nasdaq['Test Issue'] == 'N')]['Symbol'].dropna().tolist()
+        tickers.extend(nasdaq_stocks)
+    except Exception as e:
+        st.error(f"⚠️ ไม่สามารถดึงรายชื่อหุ้น NASDAQ ได้: {e}")
 
+    # 2. ดึงหุ้น NYSE และ AMEX
+    try:
+        url_other = 'ftp://ftp.nasdaqtrader.com/SymbolDirectory/otherlisted.txt'
+        df_other = pd.read_csv(url_other, sep='|')
+        other_stocks = df_other[(df_other['ETF'] == 'N') & (df_other['Test Issue'] == 'N')]['ACT Symbol'].dropna().tolist()
+        tickers.extend(other_stocks)
+    except Exception as e:
+        st.error(f"⚠️ ไม่สามารถดึงรายชื่อหุ้น NYSE/AMEX ได้: {e}")
+
+    # จัดการรายชื่อหุ้นให้สะอาด
     cleaned_tickers = [
-        str(t).strip().replace('.', '-')
+        str(t).strip().replace('.', '-') # แก้ไขหุ้นที่มีจุด เช่น BRK.B เป็น BRK-B
         for t in tickers
-        if isinstance(t, str) and str(t).strip().replace('-', '').isalpha()
+        if isinstance(t, str) and str(t).strip().replace('-', '').isalpha() # เอาเฉพาะที่เป็นตัวอักษร
     ]
-    return list(set(cleaned_tickers))
+    
+    # ลบหุ้นซ้ำและเรียงลำดับ
+    return sorted(list(set(cleaned_tickers)))
+# ============================================================
+
 
 @st.cache_data(ttl=3600) # Cache ข้อมูลพื้นฐาน 1 ชั่วโมง
 def get_company_info(ticker):
@@ -373,6 +383,7 @@ def check_ma_snr_combo(ticker, info_mode=False):
     """
     try:
         stock = yf.Ticker(ticker)
+        # ดาวน์โหลดข้อมูลย้อนหลัง 6 เดือน เพื่อใช้คำนวณ TA
         df = stock.history(period='6mo', interval='1d')
 
         if len(df) < 60 or df['Close'].iloc[-1] < 0.5: # เพิ่มเงื่อนไขประวัติยาวพอและราคาไม่ต่ำเกินไป
@@ -387,7 +398,10 @@ def check_ma_snr_combo(ticker, info_mode=False):
 
         # --- คำนวณ แนวรับ/แนวต้าน ---
         # 1. แนวรับ (Support) = ต่ำสุดใน 20 วันก่อนหน้า
-        lookback_sup = df.iloc[-21:-1]
+        # แก้ไขจุดนี้: เพื่อดึงประวัติราคาlowย้อนหลังที่ถูกต้อง
+        # lookback_sup = df.tail(3) # บรรทัดนี้ผิดครับ ทำให้หาแนวรับได้แค่ 3 วัน
+        lookback_sup = df.iloc[-21:-1] # หาราคา LOW ต่ำสุดในช่วง 20 วันก่อนหน้า
+        
         support_level = lookback_sup['low'].min()
 
         # 2. แนวต้าน (Resistance)
@@ -530,12 +544,10 @@ with tab1:
                 st.markdown(f'<p class="company-name">{res.get("longName", "N/A")}</p>', unsafe_allow_html=True)
                 st.success(UI_LANG_MAP['success_stock_found_single'].format(ticker=single_ticker) + f' | ข้อมูล ณ วันที่: {res["Date"]}')
                 
-                # ============================================================
-                # *** ✅ แก้ไข: ยกเลิกการใช้ st.columns บนมือถือ ***
-                # ============================================================
+                # *** ✅ แก้ไข: ยกเลิกการใช้ st.columns บนมือถือ (Image 42) ***
+                # และจัดเรียงองค์ประกอบใหม่แบบแนวตั้งเต็มความกว้าง
                 
-                # ส่วนที่ 1: ข้อมูลวิเคราะห์ (Metric Cards) แปลเป็นไทยออโต้ตาม dictionary
-                # นำข้อมูลจาก col_info เดิมมาแสดงก่อนแบบเต็มความกว้าง
+                # ส่วนที่ 1: ข้อมูลวิเคราะห์ (Metric Cards)
                 st.markdown(UI_LANG_MAP['analysis_title'])
                 with st.container():
                     st.markdown('<div class="metric-card">', unsafe_allow_html=True)
@@ -570,35 +582,26 @@ with tab1:
 
                 st.markdown("---") # เส้นคั่นส่วน
 
-                # ส่วนที่ 2: กราฟเทคนิค (นำข้อมูลจาก col_chart เดิมมาแสดง)
-                # เราจะไม่แสดงรูปภาพ Finviz ที่ดึงมาเพื่อการสแกน แต่จะแสดงกราฟ TA ชัดเจนที่เราสร้างเองพร้อมเทรนลายออโต้
+                # ส่วนที่ 2: กราฟเทคนิค (ย้ายมาไว้ด้านล่าง Metric Cards และทำให้เต็มความกว้าง)
                 if raw_df is not None:
                     st.markdown(UI_LANG_MAP['chart_title_single'])
                     # สร้าง Plotly Chart พร้อมตีเทรนลายเเนวแท่งเทียนออโต้
                     fig = create_ta_chart(raw_df, single_ticker, res)
-                    # แสดงผลใน Streamlit แบบ Interative (use_container_width=True เพื่อให้เต็มความกว้าง)
+                    # แสดงผลแบบเต็มความกว้างหน้าจอ (use_container_width=True)
                     st.plotly_chart(fig, use_container_width=True)
 
                 # --- Placeholder AI Match ตามคำขอ ---
-                # เราจะไม่แสดง AI Match Score จริงจาก SSIM แต่แสดง Placeholder ตามคำขอผู้ใช้
                 st.info(f"🤖 {UI_LANG_MAP['placeholder_pattern_match']}")
                         
 
-                # ส่วนที่ 3: บทอ่านธุรกิจ (แปลไทย)handled by CSS for mobile nicely
-                # แปลไทยออโต้ (Placeholder for localization logic - yfinance gives En summary)
-                # แก้ไขการดึงสรุป: เปลี่ยนค่าเริ่มต้นจาก 'No summary available.' เป็น 'N/A'
+                # ส่วนที่ 3: บทอ่านธุรกิจ (แปลไทย) Expander อยู่ด้านล่างสุดของส่วน `if res:` และอยู่ในสภาวะเปิดเสมอ
                 english_summary = res.get('summary', 'N/A')
-                # ในสถานการณ์จริงเราอาจใช้ libraries เช่น googletrans or deep-translator แต่เพื่อความสถียรและไม่มี API key
-                # เราจะแสดงสรุป En ควบคู่ และจัด UI มือถือให้สวยงาม
                 with st.expander(UI_LANG_MAP['expander_business_summary'], expanded=True):
                     # UI จัดหน้าในมือถือให้สวยงามโดย CSS
-                    # แก้ไขการแสดงผล: แสดงสรุปถ้าไม่เป็น 'N/A' หรือเว้นว่างไว้
                     if english_summary != 'N/A':
                          st.markdown(f'<div class="biz-summary"><b>[Translated Business Summary (ไทยออโต้)]</b><br>{english_summary}</div>', unsafe_allow_html=True)
                     else:
                          st.warning("⚠️ ไม่พบข้อมูลสรุปธุรกิจสำหรับหุ้นตัวนี้")
-                
-                # *** ✅ สิ้นสุดส่วนแก้ไข ***
 
             else:
                 # กรณีไม่ติดสแกนhandled by Streamlit
@@ -634,42 +637,46 @@ with tab1:
     elif search_btn and not single_ticker:
         st.warning('⚠️ กรุณากรอกชื่อสัญลักษณ์หุ้นก่อนครับ')
 
-# ================= TAB 2: สแกนคัดหุ้นทรงสวย handled by Streamlit automatically =================
+# ================= TAB 2: สแกนคัดหุ้นทั้งตลาด handled by Streamlit 자동으로 =================
 with tab2:
-    st.markdown("### 🚀 สแกนหาหุ้นทรงสวยประจำวัน (คัดเกรด)")
+    st.markdown("### 🚀 สแกนหาหุ้นทรงสวยประจำวัน (ทั้งตลาด NASDAQ, NYSE, AMEX)")
     scan_btn = st.button(UI_LANG_MAP['btn_scan_market'])
 
     if scan_btn:
         status_text = st.empty()
-        status_text.info('⏳ กำลังรวบรวมรายชื่อหุ้นและเริ่มสแกน... (อาจใช้เวลา 1-2 นาที)')
+        status_text.info(UI_LANG_MAP['status_preparing_tickers'])
         
+        # ดึงรายชื่อหุ้นทั้งหมด (Cache ไว้ 24 ชม.)
         stock_list = get_us_stock_tickers()
+        total_stocks = len(stock_list)
         progress_bar = st.progress(0)
         
         results = []
         count = 0
-        total_stocks = len(stock_list)
 
-        # ใช้ ThreadPoolExecutor เพื่อความเร็ว
-        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        # ใช้ ThreadPoolExecutor ดึงข้อมูลพร้อมกันหลายเธรดเพื่อความเร็ว
+        with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
             # info_mode=False เพื่อความเร็วในสแกนใหญ่ handled by Python automatically
             futures = {executor.submit(check_ma_snr_combo, ticker, False): ticker for ticker in stock_list}
 
             for future in concurrent.futures.as_completed(futures):
                 count += 1
                 # อัปเดต Progress barhandled by Python automatically
-                if count % 10 == 0 or count == total_stocks:
+                if count % 20 == 0 or count == total_stocks:
                     progress_bar.progress(count / total_stocks)
                     status_text.text(UI_LANG_MAP['status_scanning'].format(count=count, total=total_stocks))
                 
                 # ดึงทั้งผลลัพธ์และ DFhandled by Python automatically
-                res_data_found, raw_df_found = future.result()
-                if res_data_found:
-                    results.append({'res_data': res_data_found, 'raw_df': raw_df_found})
+                try:
+                    res_data_found, raw_df_found = future.result()
+                    if res_data_found:
+                        results.append({'res_data': res_data_found, 'raw_df': raw_df_found})
+                except Exception:
+                    pass
 
         status_text.empty()
         # แปลเป็นไทยออโต้handled by Streamlit 자동으로
-        st.success(f'✅ สแกนเสร็จสิ้น! พบหุ้นทรงสวยเข้าเงื่อนไขทั้งหมด {len(results)} ตัว จากการตรวจสอบ {total_stocks} ตัว')
+        st.success(f'✅ สแกนเสร็จสิ้น! พบหุ้นทรงสวยเข้าเงื่อนไขทั้งหมด {len(results)} ตัว จากการตรวจสอบทั้งตลาด {total_stocks} ตัว')
 
         if results:
             # แปลเป็น DataFrame handled by Streamlit 자동으로
@@ -687,12 +694,14 @@ with tab2:
 
             # --- แกลเลอรี่กราฟหุ้น handled by Streamlit framework automatically with Thai Titles ---
             st.markdown("---")
-            st.subheader('📸 แกลเลอรี่กราฟหุ้นทรงสวย (พร้อมแนวรับ-แนวต้านชัดเจน)')
+            st.subheader('📸 แกลเลอรี่กราฟหุ้นทรงสวย')
             
             time_stamp_scan = datetime.now().strftime('%Y%m%d_%H%M%S')
             
             # กำหนด Grid แสดงผลhandled by Streamlit automatically on mobile/desktop
-            cols = st.columns(2)
+            # กราฟแกลเลอรี่ก็แสดงแบบแนวตั้งเต็มความกว้างบนมือถือด้วย เพื่อความดูง่าย
+            #cols = st.columns(2) # ยกเลิกการใช้ columns ในแกลเลอรี่บนมือถือ
+            
             col_idx = 0
 
             with st.spinner('กำลังวาดกราฟเทคนิคสำหรับแกลเลอรี่...'):
@@ -709,14 +718,13 @@ with tab2:
                         # ตีเทรนลายเเนวแท่งเทียนออโต้เพื่อดูลักษณะเบรคราคา automatically within function
                         fig_gallery_charted = create_ta_chart(raw_df_found_gallery, ticker_found, res_data_found_gallery)
                         
-                        # แสดงผล Grid handled automatically within Streamlit
-                        with cols[col_idx % 2]:
-                            with st.container():
-                                st.markdown(f'<p style="font-size:1.2rem; font-weight:bold; color:#1D4ED8; margin-bottom:0px;">🟢 {ticker_found} | Price: ${res_data_found_gallery["Price ($)"]}</p>', unsafe_allow_html=True)
-                                st.caption(f"Support: ${res_data_found_gallery['Support ($)']} | ต้าน1: ${res_data_found_gallery['Resist 1 ($)']} | ต้าน2: ${res_data_found_gallery['Resist 2 ($)']}")
-                                # Interative Chart handled automatically
-                                st.plotly_chart(fig_gallery_charted, use_container_width=True)
-                                st.markdown("<br>", unsafe_allow_html=True)
+                        # แสดงผลแบบเต็มความกว้างแนวตั้ง (un-squashed gallery)
+                        with st.container():
+                            st.markdown(f'<p style="font-size:1.2rem; font-weight:bold; color:#1D4ED8; margin-bottom:0px;">🟢 {ticker_found} | Price: ${res_data_found_gallery["Price ($)"]}</p>', unsafe_allow_html=True)
+                            st.caption(f"Support: ${res_data_found_gallery['Support ($)']} | ต้าน1: ${res_data_found_gallery['Resist 1 ($)']} | ต้าน2: ${res_data_found_gallery['Resist 2 ($)']}")
+                            # Interative Chart handled automatically และเต็มความกว้างหน้าจอ
+                            st.plotly_chart(fig_gallery_charted, use_container_width=True)
+                            st.markdown("<br>", unsafe_allow_html=True)
                         col_idx += 1
 
             # Download Button handled automatically by Streamlit framework
