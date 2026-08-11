@@ -181,7 +181,6 @@ def get_financials(ticker):
 
 
 def create_ta_chart(df, ticker, res_data):
-    # กำหนดชื่อใน Legend ให้ตรงกับรูปแบบที่ต้องการ
     fig = go.Figure(data=[go.Candlestick(
         x=df.index,
         open=df['open'], high=df['high'],
@@ -216,17 +215,14 @@ def create_ta_chart(df, ticker, res_data):
     latest_date = df.index[-1]
     earliest_date = df.index[0]
     
-    # เส้นแนวรับ
     sup_val = res_data['Support ($)']
     fig.add_shape(type="line", x0=earliest_date, y0=sup_val, x1=latest_date, y1=sup_val, line=dict(color="green", width=3, dash='dash'))
     fig.add_annotation(x=latest_date, y=sup_val, text=f"Support: ${sup_val}", bgcolor="green", font=dict(color="white"), ax=0, ay=-15)
 
-    # เส้นแนวต้าน 1
     res1_val = res_data['Resist 1 ($)']
     fig.add_shape(type="line", x0=earliest_date, y0=res1_val, x1=latest_date, y1=res1_val, line=dict(color="red", width=2, dash='dash'))
     fig.add_annotation(x=latest_date, y=res1_val, text=f"Resist 1: ${res1_val}", bgcolor="red", font=dict(color="white"), ax=0, ay=-15)
 
-    # เส้นแนวต้าน 2
     res2_val = res_data['Resist 2 ($)']
     fig.add_shape(type="line", x0=earliest_date, y0=res2_val, x1=latest_date, y1=res2_val, line=dict(color="darkred", width=3))
     fig.add_annotation(x=latest_date, y=res2_val, text=f"Resist 2: ${res2_val}", bgcolor="darkred", font=dict(color="white"), ax=0, ay=15)
@@ -237,7 +233,8 @@ def create_ta_chart(df, ticker, res_data):
         template='plotly_white',
         margin=dict(l=20, r=20, t=40, b=20),
         xaxis_title="วันที่",
-        yaxis_title="ราคา ($)"
+        yaxis_title="ราคา ($)",
+        showlegend=False  # <--- เพิ่มคำสั่งนี้เพื่อซ่อนกล่องป้ายกำกับ (Legend) ออกจากกราฟ
     )
     return fig
 
@@ -314,7 +311,6 @@ with tab1:
                 st.markdown(f'<p class="company-name">{res.get("longName", "N/A")}</p>', unsafe_allow_html=True)
                 st.success(UI_LANG_MAP['success_stock_found_single'].format(ticker=single_ticker) + f' | ข้อมูล ณ วันที่: {res["Date"]}')
                 
-                # กราฟเทคนิคแสดงไว้บนสุดทันทีตามต้องการ
                 if raw_df is not None:
                     st.markdown(UI_LANG_MAP['chart_title_single'])
                     fig = create_ta_chart(raw_df, single_ticker, res)
