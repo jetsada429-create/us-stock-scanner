@@ -243,6 +243,7 @@ def get_financials(ticker):
 
 
 def create_ta_chart(df, ticker, res_data):
+    # ปรับชื่อ Legend ของกราฟแท่งเทียนให้ตรงกับรูปภาพ ('ราคา', 'MA20', 'MA50', 'เทรนแนวต้านล่าสุด (40 วัน)', 'เทรนแนวรับล่าสุด (40 วัน)')
     fig = go.Figure(data=[go.Candlestick(
         x=df.index,
         open=df['open'], high=df['high'],
@@ -270,8 +271,8 @@ def create_ta_chart(df, ticker, res_data):
         y_high_fit = model_high.predict(x_indices)
         y_low_fit = model_low.predict(x_indices)
         fit_dates = df.index[start_idx:end_idx]
-        fig.add_trace(go.Scatter(x=fit_dates, y=y_high_fit, line=dict(color='goldenrod', width=2), name='เทรนเเนวต้านล่าสุด (40 วัน)'))
-        fig.add_trace(go.Scatter(x=fit_dates, y=y_low_fit, line=dict(color='mediumturquoise', width=2), name='เทรนเเนวรับล่าสุด (40 วัน)'))
+        fig.add_trace(go.Scatter(x=fit_dates, y=y_high_fit, line=dict(color='goldenrod', width=2), name='เทรนแนวต้านล่าสุด (40 วัน)'))
+        fig.add_trace(go.Scatter(x=fit_dates, y=y_low_fit, line=dict(color='mediumturquoise', width=2), name='เทรนแนวรับล่าสุด (40 วัน)'))
     except Exception:
         pass
 
@@ -324,7 +325,7 @@ def check_ma_snr_combo(ticker, info_mode=False):
         slow_ma = df['close'].rolling(window=50).mean()
         latest_close = df['close'].iloc[-1]
 
-        lookback_sup = df.tail(20) # แก้ไขช่วง Lookback ให้ถูกต้องครอบคลุม 20 วัน
+        lookback_sup = df.tail(20)
         support_level = lookback_sup['low'].min()
 
         resistance_1 = lookback_sup['high'].max()
@@ -405,9 +406,7 @@ with tab1:
                 st.markdown(f'<p class="company-name">{res.get("longName", "N/A")}</p>', unsafe_allow_html=True)
                 st.success(UI_LANG_MAP['success_stock_found_single'].format(ticker=single_ticker) + f' | ข้อมูล ณ วันที่: {res["Date"]}')
                 
-                # ========================================================
-                # 🚀 ย้ายกราฟเทคนิคและ AI Pattern Match มาไว้บนสุดของจอภาพทันที
-                # ========================================================
+                # กราฟเทคนิคขึ้นมาไว้บนสุด
                 if raw_df is not None:
                     st.markdown(UI_LANG_MAP['chart_title_single'])
                     fig = create_ta_chart(raw_df, single_ticker, res)
@@ -416,9 +415,7 @@ with tab1:
 
                 st.markdown("---")
 
-                # ========================================================
-                # ต่อด้วยข้อมูลวิเคราะห์ (Metric Cards) และข้อมูลกำไรสุทธิ
-                # ========================================================
+                # Metric Cards และข้อมูลกำไร
                 st.markdown(UI_LANG_MAP['analysis_title'])
                 with st.container():
                     st.markdown('<div class="metric-card">', unsafe_allow_html=True)
@@ -441,11 +438,10 @@ with tab1:
                     st.dataframe(df_profit, use_container_width=True, hide_index=True)
                     st.bar_chart(df_profit.set_index('Quarter End')['Net Income (M$)'])
                 else:
-                    st.warning("ไม่พบข้อมูลกำไรสุทธิย้อนหลัง (อาจเป็นหุ้น IPO ใหม่ หรือโครงสร้างการเงินซับซ้อน)")
+                    st.warning("ไม่พบข้อมูลกำไรสุทธิย้อนหลัง")
 
                 st.markdown("---")
 
-                # สรุปธุรกิจอยู่ล่างสุด
                 english_summary = res.get('summary', 'N/A')
                 with st.expander(UI_LANG_MAP['expander_business_summary'], expanded=True):
                     if english_summary != 'N/A':
@@ -510,9 +506,7 @@ with tab2:
             cols_order_Th = ['Ticker', 'Price ($)', 'Support ($)', 'Dist_Sup (%)', 'Resist 1 ($)', 'Resist 2 ($)', 'Volume', 'Date']
             df_result_display = df_result[cols_order_Th]
 
-            # ========================================================
-            # 🚀 สลับให้แสดง "แกลเลอรี่กราฟหุ้นทรงสวย" ขึ้นมาไว้บนสุดทันทีหลังสแกนเสร็จ
-            # ========================================================
+            # แกลเลอรี่กราฟหุ้นขึ้นมาไว้บนสุดทันทีหลังสแกนเสร็จ
             st.markdown("---")
             st.subheader('📸 แกลเลอรี่กราฟหุ้นทรงสวย (แสดงผลบนสุด)')
             
@@ -537,7 +531,7 @@ with tab2:
                                 st.markdown("<br>", unsafe_allow_html=True)
                             col_idx += 1
 
-            # จากนั้นแสดงตารางสรุปไว้ด้านล่าง
+            # ตารางสรุปอยู่ด้านล่าง
             st.markdown("---")
             st.markdown("#### 📊 ตารางสรุปสัญญาณราคาและแนวรับ-ต้าน")
             st.dataframe(df_result_display, use_container_width=True, hide_index=True)
