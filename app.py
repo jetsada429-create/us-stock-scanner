@@ -54,7 +54,7 @@ st.markdown(
         padding-right: 0.5rem !important;
     }
     .main-title {
-        font-size: 1.5rem !important;
+        font-size: 1.4rem !important;
         font-weight: 800 !important;
         color: #1E293B;
         text-align: center;
@@ -62,57 +62,68 @@ st.markdown(
         line-height: 1.2;
     }
     .sub-title {
-        font-size: 0.85rem !important;
+        font-size: 0.8rem !important;
         color: #64748B;
         text-align: center;
-        margin-bottom: 1rem;
+        margin-bottom: 0.8rem;
     }
     .stButton > button {
         width: 100% !important;
         background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
         color: white !important;
-        font-size: 0.95rem !important;
+        font-size: 0.9rem !important;
         font-weight: 700 !important;
-        padding: 0.4rem 0.8rem !important;
+        padding: 0.35rem 0.6rem !important;
         border-radius: 8px !important;
         border: none !important;
-        box-shadow: 0 2px 6px rgba(37, 99, 235, 0.2) !important;
+        box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2) !important;
     }
     .company-name {
-        font-size: 1.2rem !important;
+        font-size: 1.1rem !important;
         font-weight: 700;
         color: #1E3A8A;
         margin-bottom: 0rem;
     }
     
-    /* --- ปรับส่วนหัวข้อและกล่องข้อมูลให้เล็กลงครึ่งหนึ่ง --- */
+    /* --- ปรับแต่งส่วนหัวข้อและกล่อง Metric ให้กะทัดรัดลงครึ่งหนึ่ง --- */
     h3 {
-        font-size: 1.1rem !important;
-        margin-top: 0.3rem !important;
-        margin-bottom: 0.3rem !important;
+        font-size: 1rem !important;
+        margin-top: 0.2rem !important;
+        margin-bottom: 0.2rem !important;
     }
     h4 {
-        font-size: 0.95rem !important;
+        font-size: 0.85rem !important;
         margin-top: 0.2rem !important;
         margin-bottom: 0.2rem !important;
     }
     .metric-card {
         background-color: white;
-        padding: 8px !important;
+        padding: 6px 10px !important;
         border-radius: 6px !important;
         border: 1px solid #E2E8F0;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-        margin-bottom: 0.5rem;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+        margin-bottom: 0.3rem;
     }
+    /* ย่อขนาดตัวหนังสือใน st.metric ให้เล็กลง */
+    [data-testid="stMetricValue"] {
+        font-size: 1.2rem !important;
+    }
+    [data-testid="stMetricLabel"] {
+        font-size: 0.75rem !important;
+    }
+    [data-testid="stMetricDelta"] {
+        font-size: 0.7rem !important;
+    }
+
     .biz-summary {
-        font-size: 0.8rem !important;
+        font-size: 0.75rem !important;
         color: #334155;
         background-color: #F8FAFC;
-        padding: 8px !important;
+        padding: 6px 8px !important;
         border-radius: 6px;
         border-left: 3px solid #2563EB;
-        margin-bottom: 0.5rem;
-        line-height: 1.4;
+        margin-bottom: 0.3rem;
+        line-height: 1.3;
     }
     
     #MainMenu {visibility: hidden;}
@@ -121,10 +132,10 @@ st.markdown(
 
     @media (max-width: 768px) {
         .block-container {
-            padding-top: 0.5rem !important;
-            padding-bottom: 1rem !important;
-            padding-left: 0.3rem !important;
-            padding-right: 0.3rem !important;
+            padding-top: 0.3rem !important;
+            padding-bottom: 0.8rem !important;
+            padding-left: 0.2rem !important;
+            padding-right: 0.2rem !important;
         }
     }
     </style>
@@ -283,6 +294,7 @@ def create_ta_chart(df, ticker, res_data):
         xaxis_rangeslider_visible=False,
         template='plotly_white',
         margin=dict(l=10, r=10, t=30, b=10),
+        height=380,
         xaxis_title="วันที่",
         yaxis_title="ราคา ($)",
         showlegend=False
@@ -387,8 +399,23 @@ with tab1:
                 st.markdown("<br>", unsafe_allow_html=True)
                 st.markdown("#### 💰 กำไรสุทธิ 3 ไตรมาสล่าสุด")
                 if df_profit is not None:
-                    st.dataframe(df_profit, use_container_width=True, hide_index=True)
-                    st.bar_chart(df_profit.set_index('Quarter End')['Net Income (M$)'])
+                    # จำกัดความสูงของตารางให้กะทัดรัดขึ้น
+                    st.dataframe(df_profit, use_container_width=True, hide_index=True, height=120)
+                    
+                    # แทนที่ st.bar_chart ด้วย Plotly Bar Chart เพื่อจำกัดความสูงไม่ให้ยาวเกินไป
+                    fig_profit = go.Figure(data=[go.Bar(
+                        x=df_profit['Quarter End'],
+                        y=df_profit['Net Income (M$)'],
+                        marker_color='#2563EB'
+                    )])
+                    fig_profit.update_layout(
+                        margin=dict(l=10, r=10, t=10, b=10),
+                        height=180,
+                        template='plotly_white',
+                        xaxis_title="",
+                        yaxis_title="M$"
+                    )
+                    st.plotly_chart(fig_profit, use_container_width=True)
                 else:
                     st.warning("ไม่พบข้อมูลกำไรสุทธิย้อนหลัง")
 
@@ -450,7 +477,7 @@ with tab2:
                     if match_item['raw_df'] is not None:
                         fig_gallery = create_ta_chart(match_item['raw_df'], ticker_found, match_item['res_data'])
                         with cols[col_idx % 2]:
-                            st.markdown(f'<p style="font-size:1.1rem; font-weight:bold; color:#1D4ED8; margin-bottom:0px;">🟢 {ticker_found} | Price: ${match_item["res_data"]["Price ($)"]}</p>', unsafe_allow_html=True)
+                            st.markdown(f'<p style="font-size:1rem; font-weight:bold; color:#1D4ED8; margin-bottom:0px;">🟢 {ticker_found} | Price: ${match_item["res_data"]["Price ($)"]}</p>', unsafe_allow_html=True)
                             st.caption(f"Support: ${match_item['res_data']['Support ($)']} | ต้าน1: ${match_item['res_data']['Resist 1 ($)']} | ต้าน2: ${match_item['res_data']['Resist 2 ($)']}")
                             st.plotly_chart(fig_gallery, use_container_width=True)
                             st.markdown("<br>", unsafe_allow_html=True)
@@ -458,7 +485,7 @@ with tab2:
 
             st.markdown("---")
             st.markdown("#### 📊 ตารางสรุปสัญญาณราคาและแนวรับ-ต้าน")
-            st.dataframe(df_result_display, use_container_width=True, hide_index=True)
+            st.dataframe(df_result_display, use_container_width=True, hide_index=True, height=200)
             st.download_button(
                 label='📥 ดาวน์โหลด Watchlist วันนี้ (CSV)',
                 data=df_result_display.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig'),
