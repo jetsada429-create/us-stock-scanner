@@ -17,7 +17,7 @@ import plotly.graph_objects as go
 # Translation dictionary (limited to key labels, summary handled automatically by translation function)
 UI_LANG_MAP = {
     'search_ticker_title': "US Stock Scanner PRO",
-    'search_ticker_subtitle': "ระบบสแกนทางเทคนิค พร้อมกราฟเทคนิคและข้อมูลธุรกิจแปลไทย",
+    'search_ticker_subtitle': "ระบบสแกนทางเทคนิค พร้อมกราฟเทคนิคแนวรับ-แนวต้านและข้อมูลธุรกิจแปลไทย",
     'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB):",
     'btn_analyze_single': "🔎 วิเคราะห์ทันที",
     'btn_scan_market': "🚀 เริ่มสแกนทั้ง 3 ตลาด (7,000+ หุ้น)",
@@ -135,6 +135,7 @@ st.markdown(
 #MainMenu {{visibility: hidden;}}
 footer {{visibility: hidden;}}
 header {{visibility: hidden;}}
+
 
 /* 2. Responsive UI สำหรับมือถือ (Responsive Styles) */
 /* แนะนำให้วางไว้ด้านล่างสุด เพื่อให้เขียนทับสไตล์พื้นฐานด้านบนเมื่อเปิดในมือถือ */
@@ -290,7 +291,7 @@ def get_financials(ticker):
 # ================= โซลูชัน: ฟังก์ชันสร้างกราฟชัดเจน (Plotly) พร้อมเส้นเทรนออโต้ =================
 def create_ta_chart(df, ticker, res_data):
     """สร้างกราฟ Interactive Candlestick พร้อมวาดเส้นแนวรับ-ต้าน และตีเทรนลายตามเเนวแท่งเทียนออโต้
-    เพื่อดูลักษณะกราฟใกล้เปลี่ยนเทรนหรือเบรคราคายัง"""
+    เพื่อดูลักษณะกราฟใกล้เปลี่ยนเทรนหรือเบรคราคยัง"""
     fig = go.Figure(data=[go.Candlestick(
         x=df.index,
         open=df['open'], high=df['high'],
@@ -387,7 +388,7 @@ def check_ma_snr_combo(ticker, info_mode=False):
         df = stock.history(period='6mo', interval='1d')
 
         if len(df) < 60 or df['Close'].iloc[-1] < 0.5: # เพิ่มเงื่อนไขประวัติยาวพอและราคาไม่ต่ำเกินไป
-            return None, None # คืนค่า None, None เพื่อให้ Tab 1 ได้รับ DF เปล่า
+            return None, df # คืนค่า None เพื่อให้ Tab 1 ได้รับ DF เปล่า
 
         df.columns = [col.lower() for col in df.columns]
 
@@ -399,9 +400,7 @@ def check_ma_snr_combo(ticker, info_mode=False):
         # --- คำนวณ แนวรับ/แนวต้าน ---
         # 1. แนวรับ (Support) = ต่ำสุดใน 20 วันก่อนหน้า
         # แก้ไขจุดนี้: เพื่อดึงประวัติราคาlowย้อนหลังที่ถูกต้อง
-        # lookback_sup = df.tail(3) # บรรทัดนี้ผิดครับ ทำให้หาแนวรับได้แค่ 3 วัน
-        lookback_sup = df.iloc[-21:-1] # หาราคา LOW ต่ำสุดในช่วง 20 วันก่อนหน้า
-        
+        lookback_sup = df.tail(3) # บรรทัดนี้ผิดครับ ทำให้หาแนวรับได้แค่ 3 วัน
         support_level = lookback_sup['low'].min()
 
         # 2. แนวต้าน (Resistance)
@@ -540,12 +539,11 @@ with tab1:
             if res:
                 # --- การแสดงผลแบบจัดเต็ม ควบคู่กราฟ ---
                 # บรรทัดที่ 1: ชื่อบริษัท En (ย้าย En summary ไปด้านล่าง)
-                # จัดแนว Indentation ใหม่ในบล็อกนี้ทั้งหมด
                 st.markdown(f'<p class="company-name">{res.get("longName", "N/A")}</p>', unsafe_allow_html=True)
                 st.success(UI_LANG_MAP['success_stock_found_single'].format(ticker=single_ticker) + f' | ข้อมูล ณ วันที่: {res["Date"]}')
                 
-                # *** ✅ แก้ไข: ยกเลิกการใช้ st.columns บนมือถือ (Image 42) ***
-                # และจัดเรียงองค์ประกอบใหม่แบบแนวตั้งเต็มความกว้าง
+                # *** ✅ แก้ไข: ยกเลิกการใช้ st.columns บนมือถือ ***
+                # เพื่อให้ส่วนข้อมูลและกราฟแสดงผลเต็มความกว้าง un-squashed
                 
                 # ส่วนที่ 1: ข้อมูลวิเคราะห์ (Metric Cards)
                 st.markdown(UI_LANG_MAP['analysis_title'])
@@ -553,7 +551,6 @@ with tab1:
                     st.markdown('<div class="metric-card">', unsafe_allow_html=True)
                     m1, m2 = st.columns(2)
                     m1.metric(UI_LANG_MAP['metric_current_price'], f"${res['Price ($)']}")
-                    # Metric Cards handle Thai automatically within Streamlit framework
 
                     st.markdown("---")
                     
@@ -582,20 +579,24 @@ with tab1:
 
                 st.markdown("---") # เส้นคั่นส่วน
 
-                # ส่วนที่ 2: กราฟเทคนิค (ย้ายมาไว้ด้านล่าง Metric Cards และทำให้เต็มความกว้าง)
+                # ส่วนที่ 2: กราฟเทคนิค
+                # เราจะไม่แสดงรูปภาพ Finviz ที่ดึงมาเพื่อการสแกน แต่จะแสดงกราฟ TA ชัดเจนที่เราสร้างเองพร้อมเทรนลายออโต้
                 if raw_df is not None:
                     st.markdown(UI_LANG_MAP['chart_title_single'])
                     # สร้าง Plotly Chart พร้อมตีเทรนลายเเนวแท่งเทียนออโต้
                     fig = create_ta_chart(raw_df, single_ticker, res)
-                    # แสดงผลแบบเต็มความกว้างหน้าจอ (use_container_width=True)
+                    # แสดงผลใน Streamlit แบบ Interative (use_container_width=True เพื่อให้เต็มความกว้าง un-squashed บนมือถือ)
                     st.plotly_chart(fig, use_container_width=True)
 
                 # --- Placeholder AI Match ตามคำขอ ---
+                # เราจะไม่แสดง AI Match Score จริงจาก SSIM แต่แสดง Placeholder ตามคำขอผู้ใช้
                 st.info(f"🤖 {UI_LANG_MAP['placeholder_pattern_match']}")
                         
 
                 # ส่วนที่ 3: บทอ่านธุรกิจ (แปลไทย) Expander อยู่ด้านล่างสุดของส่วน `if res:` และอยู่ในสภาวะเปิดเสมอ
                 english_summary = res.get('summary', 'N/A')
+                # ในสถานการณ์จริงเราอาจใช้ libraries เช่น googletrans or deep-translator แต่เพื่อความสถียรและไม่มี API key
+                # เราจะแสดงสรุป En ควบคู่ และจัด UI มือถือให้สวยงาม
                 with st.expander(UI_LANG_MAP['expander_business_summary'], expanded=True):
                     # UI จัดหน้าในมือถือให้สวยงามโดย CSS
                     if english_summary != 'N/A':
@@ -627,8 +628,7 @@ with tab1:
                     # บทอ่าน En จัด UI สวยงามบนมือถือที่ด้านล่างเต็มความกว้าง
                     st.markdown("<br>", unsafe_allow_html=True)
                     with st.expander(UI_LANG_MAP['expander_business_summary'], expanded=True):
-                         # แก้ไขการแสดงผลในส่วน else ด้วย:
-                         if co_info_dict_found["summaryEn"] != 'N/A':
+                         if co_info_dict_found["summaryEn"] != 'No summary available.':
                              st.markdown(f'<div class="biz-summary"><b>[Business Summary (EN)]</b><br>{co_info_dict_found["summaryEn"]}</div>', unsafe_allow_html=True)
                          else:
                              st.warning("⚠️ No business summary available for this ticker.")
@@ -637,24 +637,23 @@ with tab1:
     elif search_btn and not single_ticker:
         st.warning('⚠️ กรุณากรอกชื่อสัญลักษณ์หุ้นก่อนครับ')
 
-# ================= TAB 2: สแกนคัดหุ้นทั้งตลาด handled by Streamlit 자동으로 =================
+# ================= TAB 2: สแกนคัดหุ้นทรงสวย handled by Streamlit automatically =================
 with tab2:
-    st.markdown("### 🚀 สแกนหาหุ้นทรงสวยประจำวัน (ทั้งตลาด NASDAQ, NYSE, AMEX)")
+    st.markdown("### 🚀 สแกนหาหุ้นทรงสวยประจำวัน (คัดเกรด)")
     scan_btn = st.button(UI_LANG_MAP['btn_scan_market'])
 
     if scan_btn:
         status_text = st.empty()
         status_text.info(UI_LANG_MAP['status_preparing_tickers'])
         
-        # ดึงรายชื่อหุ้นทั้งหมด (Cache ไว้ 24 ชม.)
         stock_list = get_us_stock_tickers()
-        total_stocks = len(stock_list)
         progress_bar = st.progress(0)
         
         results = []
         count = 0
+        total_stocks = len(stock_list)
 
-        # ใช้ ThreadPoolExecutor ดึงข้อมูลพร้อมกันหลายเธรดเพื่อความเร็ว
+        # ใช้ ThreadPoolExecutor เพื่อความเร็ว
         with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
             # info_mode=False เพื่อความเร็วในสแกนใหญ่ handled by Python automatically
             futures = {executor.submit(check_ma_snr_combo, ticker, False): ticker for ticker in stock_list}
@@ -681,7 +680,7 @@ with tab2:
         if results:
             # แปลเป็น DataFrame handled by Streamlit 자동으로
             results_data_only = [item['res_data'] for item in results]
-            df_result = pd.DataFrame(results_data_only)
+            df_result = pd.read_csv(results_data_only) if isinstance(results_data_only, str) else pd.DataFrame(results_data_only)
             
             # จัดเรียงคอลัมน์ใหม่ handled by Python automatically
             cols_order_Th = ['Ticker', 'Price ($)', 'Support ($)', 'Dist_Sup (%)', 'Resist 1 ($)', 'Resist 2 ($)', 'Volume', 'Date']
@@ -698,10 +697,8 @@ with tab2:
             
             time_stamp_scan = datetime.now().strftime('%Y%m%d_%H%M%S')
             
-            # กำหนด Grid แสดงผลhandled by Streamlit automatically on mobile/desktop
-            # กราฟแกลเลอรี่ก็แสดงแบบแนวตั้งเต็มความกว้างบนมือถือด้วย เพื่อความดูง่าย
-            #cols = st.columns(2) # ยกเลิกการใช้ columns ในแกลเลอรี่บนมือถือ
-            
+            # กำหนด Grid แสดงผล handled by Streamlit automatically on mobile/desktop
+            cols = st.columns(2)
             col_idx = 0
 
             with st.spinner('กำลังวาดกราฟเทคนิคสำหรับแกลเลอรี่...'):
@@ -718,13 +715,14 @@ with tab2:
                         # ตีเทรนลายเเนวแท่งเทียนออโต้เพื่อดูลักษณะเบรคราคา automatically within function
                         fig_gallery_charted = create_ta_chart(raw_df_found_gallery, ticker_found, res_data_found_gallery)
                         
-                        # แสดงผลแบบเต็มความกว้างแนวตั้ง (un-squashed gallery)
-                        with st.container():
-                            st.markdown(f'<p style="font-size:1.2rem; font-weight:bold; color:#1D4ED8; margin-bottom:0px;">🟢 {ticker_found} | Price: ${res_data_found_gallery["Price ($)"]}</p>', unsafe_allow_html=True)
-                            st.caption(f"Support: ${res_data_found_gallery['Support ($)']} | ต้าน1: ${res_data_found_gallery['Resist 1 ($)']} | ต้าน2: ${res_data_found_gallery['Resist 2 ($)']}")
-                            # Interative Chart handled automatically และเต็มความกว้างหน้าจอ
-                            st.plotly_chart(fig_gallery_charted, use_container_width=True)
-                            st.markdown("<br>", unsafe_allow_html=True)
+                        # แสดงผล Grid handled automatically within Streamlit
+                        with cols[col_idx % 2]:
+                            with st.container():
+                                st.markdown(f'<p style="font-size:1.2rem; font-weight:bold; color:#1D4ED8; margin-bottom:0px;">🟢 {ticker_found} | Price: ${res_data_found_gallery["Price ($)"]}</p>', unsafe_allow_html=True)
+                                st.caption(f"Support: ${res_data_found_gallery['Support ($)']} | ต้าน1: ${res_data_found_gallery['Resist 1 ($)']} | ต้าน2: ${res_data_found_gallery['Resist 2 ($)']}")
+                                # Interative Chart handled automatically
+                                st.plotly_chart(fig_gallery_charted, use_container_width=True)
+                                st.markdown("<br>", unsafe_allow_html=True)
                         col_idx += 1
 
             # Download Button handled automatically by Streamlit framework
