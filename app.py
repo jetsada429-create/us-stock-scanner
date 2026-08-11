@@ -51,106 +51,122 @@ st.set_page_config(
 # ปรับ padding และขนาด font ให้เหมาะสมกับมือถือ
 st.markdown(
     f"""
-    <style>
-    /* CSS จัดการ UI มือถือ */
-    @media (max-width: 768px) {{
-        .block-container {{
-            padding-top: 1rem !important;
-            padding-bottom: 2rem !important;
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
-        }}
-        .main-title {{
-            font-size: 1.5rem !important;
-        }}
-        .sub-title {{
-            font-size: 0.8rem !important;
-        }}
-        .company-name {{
-            font-size: 1.2rem !important;
-        }}
-        .metric-card {{
-            padding: 10px !important;
-        }}
-        .metric-label {{
-            font-size: 0.8rem !important;
-        }}
-        .metric-value {{
-            font-size: 1.2rem !important;
-        }}
-    }}
+   <style>
+/* 1. สไตล์พื้นฐาน (Global Styles) - มีผลกับทุกขนาดหน้าจอ */
+.block-container {{
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+}}
+
+.main-title {{
+    font-size: 2rem !important;
+    font-weight: 800 !important;
+    color: #1E293B;
+    text-align: center;
+    margin-bottom: 0.3rem;
+    line-height: 1.3;
+}}
+
+.sub-title {{
+    font-size: 1rem !important;
+    color: #64748B;
+    text-align: center;
+    margin-bottom: 1.5rem;
+}}
+
+/* ปุ่ม Streamlit */
+.stButton > button {{
+    width: 100% !important;
+    background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
+    color: white !important;
+    font-size: 1.1rem !important;
+    font-weight: 700 !important;
+    padding: 0.75rem 1rem !important;
+    border-radius: 12px !important;
+    border: none !important;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2) !important;
+    transition: all 0.2s ease;
+}}
+
+.stButton > button:hover {{
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(37, 99, 235, 0.3) !important;
+}}
+
+/* Style สำหรับข้อมูลบริษัทและ Metric */
+.company-name {{
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1E3A8A;
+    margin-bottom: 0rem;
+}}
+
+.biz-summary {{
+    font-size: 0.9rem;
+    color: #475569;
+    background-color: #F1F5F9;
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}}
+
+.metric-card {{
+    background-color: white;
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px solid #E2E8F0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}}
+
+.metric-label {{
+    font-size: 0.9rem;
+    color: #64748B;
+    font-weight: 600;
+}}
+
+.metric-value {{
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #1E293B;
+}}
+
+/* ซ่อน Header/Footer ของ Streamlit */
+#MainMenu {{visibility: hidden;}}
+footer {{visibility: hidden;}}
+header {{visibility: hidden;}}
+
+
+/* 2. Responsive UI สำหรับมือถือ (Responsive Styles) */
+/* แนะนำให้วางไว้ด้านล่างสุด เพื่อให้เขียนทับสไตล์พื้นฐานด้านบนเมื่อเปิดในมือถือ */
+@media (max-width: 768px) {{
     .block-container {{
         padding-top: 1rem !important;
-        padding-bottom: 1rem !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
+        padding-bottom: 2rem !important;
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
     }}
     .main-title {{
-        font-size: 2rem !important;
-        font-weight: 800 !important;
-        color: #1E293B;
-        text-align: center;
-        margin-bottom: 0.3rem;
-        line-height: 1.3;
-    }
+        font-size: 1.5rem !important;
+    }}
     .sub-title {{
-        font-size: 1rem !important;
-        color: #64748B;
-        text-align: center;
-        margin-bottom: 1.5rem;
-    }
-    .stButton > button {{
-        width: 100% !important;
-        background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
-        color: white !important;
-        font-size: 1.1rem !important;
-        font-weight: 700 !important;
-        padding: 0.75rem 1rem !important;
-        border-radius: 12px !important;
-        border: none !important;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2) !important;
-        transition: all 0.2s ease;
-    }
-    .stButton > button:hover {{
-        transform: translateY(-2px);
-        box-shadow: 0 6px 15px rgba(37, 99, 235, 0.3) !important;
-    }
-    /* Style สำหรับข้อมูลบริษัท */
+        font-size: 0.8rem !important;
+    }}
     .company-name {{
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #1E3A8A;
-        margin-bottom: 0rem;
-    }
-    .biz-summary {{
-        font-size: 0.9rem;
-        color: #475569;
-        background-color: #F1F5F9;
-        padding: 10px;
-        border-radius: 8px;
-        margin-bottom: 1rem;
-    }
+        font-size: 1.2rem !important;
+    }}
     .metric-card {{
-        background-color: white;
-        padding: 15px;
-        border-radius: 10px;
-        border: 1px solid #E2E8F0;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
+        padding: 10px !important;
+    }}
     .metric-label {{
-        font-size: 0.9rem;
-        color: #64748B;
-        font-weight: 600;
-    }
+        font-size: 0.8rem !important;
+    }}
     .metric-value {{
-        font-size: 1.5rem;
-        font-weight: 800;
-        color: #1E293B;
-    }
-    #MainMenu {{visibility: hidden;}}
-    footer {{visibility: hidden;}}
-    header {{visibility: hidden;}}
-    </style>
+        font-size: 1.2rem !important;
+    }}
+}}
+</style>
 """,
     unsafe_allow_html=True,
 )
