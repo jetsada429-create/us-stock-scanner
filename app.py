@@ -48,10 +48,9 @@ st.set_page_config(
 )
 
 # 2. Custom CSS สำหรับปรับหน้าตาให้สวยงามบนมือถือและ Desktop และจัด UI มือถือให้ดีขึ้น
-# ปรับ padding และขนาด font ให้เหมาะสมกับมือถือ
 st.markdown(
     f"""
-   <style>
+    <style>
 /* 1. สไตล์พื้นฐาน (Global Styles) - มีผลกับทุกขนาดหน้าจอ */
 .block-container {{
     padding-top: 1rem !important;
@@ -523,11 +522,12 @@ with tab1:
 
             if res:
                 # --- การแสดงผลแบบจัดเต็ม ควบคู่กราฟ ---
-                
                 # บรรทัดที่ 1: ชื่อบริษัท En (ย้าย En summary ไปด้านล่าง)
-                                st.markdown(f'<p class="company-name">{res.get("longName", "N/A")}</p>', unsafe_allow_html=True)
-                                st.success(UI_LANG_MAP['success_stock_found_single'].format(ticker=single_ticker) + f' | ข้อมูล ณ วันที่: {res["Date"]}')
-             # แบ่ง Col หลัก: ซ้าย (ข้อมูล) | ขวา (กราฟ)
+                # จัดแนว Indentation ใหม่ในบล็อกนี้ทั้งหมด
+                st.markdown(f'<p class="company-name">{res.get("longName", "N/A")}</p>', unsafe_allow_html=True)
+                st.success(UI_LANG_MAP['success_stock_found_single'].format(ticker=single_ticker) + f' | ข้อมูล ณ วันที่: {res["Date"]}')
+                
+                # แบ่ง Col หลัก: ซ้าย (ข้อมูล) | ขวา (กราฟ)
                 col_info, col_chart = st.columns([1, 2])
                 
                 with col_chart:
@@ -542,10 +542,9 @@ with tab1:
 
                     # --- Placeholder AI Match ตามคำขอ ---
                     # เราจะไม่แสดง AI Match Score จริงจาก SSIM แต่แสดง Placeholder ตามคำขอผู้ใช้
-                    
-                    # *** แก้ไข: ปรับย่อหน้าบรรทัดนี้ให้ตรงกับคอมเมนต์ด้านบน ***
                     st.info(f"🤖 {UI_LANG_MAP['placeholder_pattern_match']}")
-              
+                            
+
                 with col_info:
                     st.markdown(UI_LANG_MAP['analysis_title'])
                     
@@ -588,7 +587,7 @@ with tab1:
                 # เราจะแสดงสรุป En ควบคู่ และจัด UI มือถือให้สวยงาม
                 with st.expander(UI_LANG_MAP['expander_business_summary'], expanded=True):
                     # UI จัดหน้าในมือถือให้สวยงามโดย CSS
-                    st.markdown(f'<div class="biz-summary"><b>[Business Summary (EN)]</b><br>{english_summary}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="biz-summary"><b>[Translated Business Summary (ไทยออโต้)]</b><br>{english_summary}</div>', unsafe_allow_html=True)
 
             else:
                 # กรณีไม่ติดสแกนhandled by Streamlit
