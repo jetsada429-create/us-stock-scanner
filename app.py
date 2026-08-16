@@ -15,7 +15,7 @@ import plotly.graph_objects as go
 # ================= ส่วนตั้งค่าแอปและภาษา =================
 UI_LANG_MAP = {
     'search_ticker_title': "US Stock Scanner PRO (Enterprise Edition)",
-    'search_ticker_subtitle': "ระบบสแกนทางเทคนิค พร้อมเลือก Timeframe, 3 แนวรับ, 4 แนวต้าน และ AI Pattern Match",
+    'search_ticker_subtitle': "ระบบสแกนทางเทคนิค พร้อมเลือก Timeframe อิสระแต่ละตัว, 3 แนวรับ, 4 แนวต้าน",
     'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB):",
     'btn_analyze_single': "🔎 วิเคราะห์ทันที",
     'btn_scan_market': "🚀 เริ่มสแกนทั้ง 3 ตลาด (7,000+ หุ้น)",
@@ -258,7 +258,6 @@ def get_financials(ticker):
 
 
 def fetch_stock_data(ticker, timeframe):
-    """ฟังก์ชันดึงข้อมูลตาม Timeframe ที่เลือก (H1, H4, D, W)"""
     stock = yf.Ticker(ticker)
     if timeframe == 'H1':
         df = stock.history(period='60d', interval='1h')
@@ -271,6 +270,70 @@ def fetch_stock_data(ticker, timeframe):
     else:  # Daily (D)
         df = stock.history(period='1y', interval='1d')
     return df
+
+
+def calculate_indicators(df):
+    if df.empty or len(df) < 50:
+        return None, None, None, None, None, None, None, None, None, None
+    
+    df.columns = [col.lower() for col in df.columns]
+    
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    latest_rsi = round(df['rsi'].iloc[-1], 2)
+
+    latest_close = df['close'].iloc[-1]
+    slow_ma = df['close'].rolling(window=50).mean()
+
+    lows = df['low'].values
+    lower_lows = sorted(list(set(lows[lows < latest_close])), reverse=True)
+    
+    s1, s2, s3 = latest_close * 0.95, latest_close * 0.90, latest_close * 0.85
+    if len(lower_lows) >= 3:
+        step = max(1, len(lower_lows) // 3)
+        s1 = lower_lows[0]
+        s2 = lower_lows[min(step, len(lower_lows)-1)]
+        s3 = lower_lows[-1]
+    elif len(lower_lows) > 0:
+        s1 = lower_lows[0]
+        s3 = lower_lows[-1]
+        s2 = s1 - (s1 - s3) * 0.5
+
+    highs = df['high'].values
+    sorted_highs = sorted(list(set(highs[highs > latest_close])), reverse=False)
+    
+    r1, r2, r3, r4 = latest_close * 1.05, latest_close * 1.12, latest_close * 1.25, latest_close * 1.40
+    if len(sorted_highs) >= 4:
+        step_r = max(1, len(sorted_highs) // 4)
+        r1 = sorted_highs[min(step_r, len(sorted_highs)-1)]
+        r2 = sorted_highs[min(step_r*2, len(sorted_highs)-1)]
+        r3 = sorted_highs[min(step_r*3, len(sorted_highs)-1)]
+        r4 = sorted_highs[-1]
+    elif len(sorted_highs) > 0:
+        r1 = sorted_highs[0]
+        r4 = sorted_highs[-1]
+        r2 = r1 + (r4 - r1) * 0.33
+        r3 = r1 + (r4 - r1) * 0.66
+
+    dist_from_sup = ((latest_close - s1) / s1) * 100
+    res_data = {
+        'Price ($)': round(latest_close, 2),
+        'Support 1 ($)': round(s1, 2),
+        'Support 2 ($)': round(s2, 2),
+        'Support 3 ($)': round(s3, 2),
+        'Resist 1 ($)': round(r1, 2),
+        'Resist 2 ($)': round(r2, 2),
+        'Resist 3 ($)': round(r3, 2),
+        'Resist 4 ($)': round(r4, 2),
+        'Dist_Sup (%)': f'+{dist_from_sup:.2f}%',
+        'RSI': latest_rsi,
+        'Volume': f"{df['volume'].iloc[-1]:,.0f}",
+        'Date': df.index[-1].strftime('%Y-%m-%d'),
+    }
+    return df, res_data
 
 
 def create_ta_chart(df, ticker, res_data, timeframe):
@@ -290,7 +353,6 @@ def create_ta_chart(df, ticker, res_data, timeframe):
     latest_date = df.index[-1]
     earliest_date = df.index[0]
     
-    # 3 แนวรับ
     supports = [
         ('Support 1 ($)', '#22C55E', -15),
         ('Support 2 ($)', '#16A34A', -15),
@@ -302,7 +364,6 @@ def create_ta_chart(df, ticker, res_data, timeframe):
             fig.add_shape(type="line", x0=earliest_date, y0=val, x1=latest_date, y1=val, line=dict(color=color, width=2, dash='dash'))
             fig.add_annotation(x=latest_date, y=val, text=f"{key.replace(' ($)', '')}: ${val}", bgcolor=color, font=dict(color="white"), ax=0, ay=ay_pos)
 
-    # 4 แนวต้าน
     resistances = [
         ('Resist 1 ($)', '#EF4444', -15),
         ('Resist 2 ($)', '#F97316', -15),
@@ -331,52 +392,15 @@ def create_ta_chart(df, ticker, res_data, timeframe):
 def check_ma_snr_combo(ticker, timeframe='D', info_mode=False):
     try:
         df = fetch_stock_data(ticker, timeframe)
-        if len(df) < 50 or df['Close'].iloc[-1] < 0.5:
+        df, res_data = calculate_indicators(df)
+        if res_data is None:
             return None, df
 
-        df.columns = [col.lower() for col in df.columns]
-        
-        delta = df['close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / loss
-        df['rsi'] = 100 - (100 / (1 + rs))
-        latest_rsi = round(df['rsi'].iloc[-1], 2)
-
-        latest_close = df['close'].iloc[-1]
+        latest_close = res_data['Price ($)']
         slow_ma = df['close'].rolling(window=50).mean()
-
-        lows = df['low'].values
-        lower_lows = sorted(list(set(lows[lows < latest_close])), reverse=True)
-        
-        s1, s2, s3 = latest_close * 0.95, latest_close * 0.90, latest_close * 0.85
-        if len(lower_lows) >= 3:
-            step = max(1, len(lower_lows) // 3)
-            s1 = lower_lows[0]
-            s2 = lower_lows[min(step, len(lower_lows)-1)]
-            s3 = lower_lows[-1]
-        elif len(lower_lows) > 0:
-            s1 = lower_lows[0]
-            s3 = lower_lows[-1]
-            s2 = s1 - (s1 - s3) * 0.5
-
-        highs = df['high'].values
-        sorted_highs = sorted(list(set(highs[highs > latest_close])), reverse=False)
-        
-        r1, r2, r3, r4 = latest_close * 1.05, latest_close * 1.12, latest_close * 1.25, latest_close * 1.40
-        if len(sorted_highs) >= 4:
-            step_r = max(1, len(sorted_highs) // 4)
-            r1 = sorted_highs[min(step_r, len(sorted_highs)-1)]
-            r2 = sorted_highs[min(step_r*2, len(sorted_highs)-1)]
-            r3 = sorted_highs[min(step_r*3, len(sorted_highs)-1)]
-            r4 = sorted_highs[-1]
-        elif len(sorted_highs) > 0:
-            r1 = sorted_highs[0]
-            r4 = sorted_highs[-1]
-            r2 = r1 + (r4 - r1) * 0.33
-            r3 = r1 + (r4 - r1) * 0.66
-
         recent_3d_low = df['low'].tail(3).min()
+        s1 = res_data['Support 1 ($)']
+
         near_support = recent_3d_low <= (s1 * 1.05)
         near_ma50 = recent_3d_low <= (slow_ma.iloc[-1] * 1.02)
 
@@ -384,22 +408,10 @@ def check_ma_snr_combo(ticker, timeframe='D', info_mode=False):
             return None, df
 
         if latest_close > df['open'].iloc[-1] and df['volume'].iloc[-1] >= 200_000:
-            dist_from_sup = ((latest_close - s1) / s1) * 100
-            res_data = {
-                'Ticker': ticker,
-                'Price ($)': round(latest_close, 2),
-                'Support 1 ($)': round(s1, 2),
-                'Support 2 ($)': round(s2, 2),
-                'Support 3 ($)': round(s3, 2),
-                'Resist 1 ($)': round(r1, 2),
-                'Resist 2 ($)': round(r2, 2),
-                'Resist 3 ($)': round(r3, 2),
-                'Resist 4 ($)': round(r4, 2),
-                'Dist_Sup (%)': f'+{dist_from_sup:.2f}%',
-                'RSI': latest_rsi,
-                'Volume': f"{df['volume'].iloc[-1]:,.0f}",
-                'Date': df.index[-1].strftime('%Y-%m-%d'),
-            }
+            res_data['Ticker'] = ticker
+            res_data['Volume'] = f"{df['volume'].iloc[-1]:,.0f}"
+            res_data['Date'] = df.index[-1].strftime('%Y-%m-%d')
+            
             if info_mode:
                 co_info = get_company_info_and_holders(ticker)
                 res_data.update(co_info)
@@ -450,7 +462,6 @@ with tab1:
                     st.markdown(f"#### {UI_LANG_MAP['chart_title_single']}")
                     fig = create_ta_chart(raw_df, single_ticker, res, selected_tf)
                     st.plotly_chart(fig, use_container_width=True)
-                    # ข้อความ AI Pattern Match จากรูปที่ 1
                     st.markdown(f'<div class="pattern-box">😊 {UI_LANG_MAP["placeholder_pattern_match"]}</div>', unsafe_allow_html=True)
 
                 st.markdown("---")
@@ -604,7 +615,7 @@ with tab2:
                 try:
                     res_data_found, raw_df_found = future.result()
                     if res_data_found:
-                        results.append({'res_data': res_data_found, 'raw_df': raw_df_found, 'tf': scan_tf})
+                        results.append({'res_data': res_data_found, 'ticker': future.result() if False else res_data_found['Ticker']})
                 except Exception:
                     pass
 
@@ -625,7 +636,7 @@ with tab2:
         df_result_display = st.session_state.scan_df
 
         st.markdown("---")
-        st.subheader('📸 แกลเลอรี่กราฟหุ้นทรงสวย (พร้อมรายละเอียดบริษัทและ AI Pattern Match)')
+        st.subheader('📸 แกลเลอรี่กราฟหุ้นทรงสวย (เลือกเปลี่ยน Timeframe ของแต่ละตัวได้อิสระ)')
         
         items_per_page = 6
         total_pages = max(1, (len(results) + items_per_page - 1) // items_per_page)
@@ -638,27 +649,31 @@ with tab2:
         cols = st.columns(2)
         col_idx = 0
 
-        with st.spinner('กำลังวาดกราฟเทคนิคสำหรับแกลเลอรี่...'):
-            for item in current_page_items:
-                res_data = item['res_data']
-                ticker_found = res_data['Ticker']
-                co_name = res_data.get('longNameEn', ticker_found)
-                shares = res_data.get('sharesOutstanding', 'N/A')
-                inst = res_data.get('institutionalHeld', 'N/A')
-                retail = res_data.get('retailHeld', 'N/A')
-                raw_df_found_gallery = item['raw_df']
-                item_tf = item.get('tf', 'D')
+        for item in current_page_items:
+            res_data = item['res_data']
+            ticker_found = res_data['Ticker']
+            co_name = res_data.get('longNameEn', ticker_found)
+            shares = res_data.get('sharesOutstanding', 'N/A')
+            inst = res_data.get('institutionalHeld', 'N/A')
 
-                if raw_df_found_gallery is not None:
-                    fig_gallery = create_ta_chart(raw_df_found_gallery, ticker_found, res_data, item_tf)
-                    with cols[col_idx % 2]:
-                        st.markdown(f'<p style="font-size:0.95rem; font-weight:bold; color:#60A5FA; margin-bottom:0px;">🟢 {ticker_found} : {co_name} | ${res_data["Price ($)"]}</p>', unsafe_allow_html=True)
-                        st.caption(f"Support 1: ${res_data['Support 1 ($)']} | ต้าน1: ${res_data['Resist 1 ($)']} | หุ้นทั้งหมด: {shares} | สถาบัน: {inst}")
+            with cols[col_idx % 2]:
+                with st.container():
+                    st.markdown(f'<p style="font-size:0.95rem; font-weight:bold; color:#60A5FA; margin-bottom:0px;">🟢 {ticker_found} : {co_name}</p>', unsafe_allow_html=True)
+                    
+                    # เพิ่มปุ่มเลือก Timeframe เฉพาะของการ์ดหุ้นตัวนี้
+                    card_tf = st.selectbox("Timeframe:", ['D', 'H1', 'H4', 'W'], index=0, key=f"card_tf_{ticker_found}")
+                    
+                    # ดึงข้อมูลและคำนวณใหม่ตาม Timeframe ที่เลือกในการ์ดนี้
+                    df_card, res_card = check_ma_snr_combo(ticker_found, timeframe=card_tf, info_mode=False)
+                    if df_card is not None and res_card is not None:
+                        fig_gallery = create_ta_chart(df_card, ticker_found, res_card, card_tf)
                         st.plotly_chart(fig_gallery, use_container_width=True)
-                        # ใส่กล่อง AI Pattern Match ใต้กราฟแกลเลอรี่ทุกตัว
                         st.markdown(f'<div class="pattern-box" style="font-size:0.75rem; padding:4px 8px;">😊 {UI_LANG_MAP["placeholder_pattern_match"]}</div>', unsafe_allow_html=True)
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        col_idx += 1
+                    else:
+                        st.warning("ไม่สามารถโหลดกราฟในช่วงเวลานี้ได้")
+                        
+                    st.markdown("<br>", unsafe_allow_html=True)
+                col_idx += 1
 
         st.markdown("---")
         st.markdown("#### 📊 ตารางสรุปสัญญาณราคาและโครงสร้างผู้ถือหุ้น")
