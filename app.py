@@ -34,7 +34,6 @@ UI_LANG_MAP = {
     'tab_watchlist': "⭐ Watchlist ส่วนตัว",
 }
 
-# พจนานุกรมหมวดหมู่กลุ่มธุรกิจ (Sector Mapping)
 SECTOR_MAP_TH = {
     'Technology': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์',
     'Healthcare': '🏥 สุขภาพ / การแพทย์ & ยา',
@@ -151,7 +150,7 @@ st.markdown(
         background-color: #1E293B;
         padding: 6px 10px;
         border-radius: 6px;
-        margin-bottom: 4px;
+        margin-bottom: 6px;
         display: inline-block;
     }
     .biz-summary {
@@ -252,7 +251,6 @@ def get_company_info_and_holders(ticker):
         th_summary = translate_text_to_thai(eng_summary) if eng_summary != 'N/A' else 'N/A'
         company_name = info.get('longName', ticker)
         
-        # ดึงและแปลงกลุ่มธุรกิจ (Sector & Industry)
         raw_sector = info.get('sector', 'N/A')
         raw_industry = info.get('industry', 'N/A')
         sector_th = SECTOR_MAP_TH.get(raw_sector, raw_sector)
@@ -363,29 +361,9 @@ def create_ta_chart(df, ticker, res_data):
     fig.update_layout(
         xaxis_rangeslider_visible=False,
         template='plotly_dark',
-        margin=dict(l=10, r=10, t=35, b=10),
+        margin=dict(l=10, r=10, t=15, b=10),
         height=380,
         dragmode='pan',
-        xaxis=dict(
-            rangeselector=dict(
-                buttons=list([
-                    dict(count=1, label="1M", step="month", stepmode="backward"),
-                    dict(count=3, label="3M", step="month", stepmode="backward"),
-                    dict(count=6, label="6M", step="month", stepmode="backward"),
-                    dict(count=1, label="1Y", step="year", stepmode="backward"),
-                    dict(step="all", label="ALL")
-                ]),
-                bgcolor="#1E293B",
-                activecolor="#2563EB",
-                font=dict(color="#FFFFFF", size=10),
-                x=0.0,
-                y=1.12,
-                xanchor="left",
-                yanchor="top"
-            ),
-            type="date",
-            title=""
-        ),
         yaxis_title="ราคา ($)",
         showlegend=False
     )
@@ -530,6 +508,7 @@ with tab1:
                 st.markdown("---")
                 st.markdown(f"#### {UI_LANG_MAP['analysis_title']}")
                 
+                # แสดงการ์ดแบบเรียงลำดับแถวต่อแถว
                 col_m1, col_m2 = st.columns(2)
                 with col_m1:
                     st.markdown(f"""
