@@ -14,7 +14,7 @@ import plotly.graph_objects as go
 # ================= ส่วนตั้งค่าแอปและภาษา =================
 UI_LANG_MAP = {
     'search_ticker_title': "US Stock Scanner PRO (Enterprise Edition)",
-    'search_ticker_subtitle': "ระบบสแกนทางเทคนิค พร้อม 4 แนวต้าน, โครงการผู้ถือหุ้น และแปลไทยออโต้",
+    'search_ticker_subtitle': "ระบบสแกนทางเทคนิค พร้อม 3 แนวรับ, 4 แนวต้าน และโครงสร้างผู้ถือหุ้น",
     'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB):",
     'btn_analyze_single': "🔎 วิเคราะห์ทันที",
     'btn_scan_market': "🚀 เริ่มสแกนทั้ง 3 ตลาด (7,000+ หุ้น)",
@@ -24,11 +24,10 @@ UI_LANG_MAP = {
     'success_stock_found_single': "🟢 หุ้น **{ticker}** ผ่านเงื่อนไขสแกนสัญญาณ BUY!",
     'error_stock_not_found_single': "🔴 หุ้น **{ticker}** ไม่ติดเงื่อนไขสัญญาณซื้อในขณะนี้",
     'expander_business_summary': "📖 สรุปธุรกิจ & โครงสร้างผู้ถือหุ้น (แปลไทยอัตโนมัติ)",
-    'chart_title_single': "📈 กราฟเทคนิคแนวรับ และ 4 ระดับแนวต้าน",
+    'chart_title_single': "📈 กราฟเทคนิค 3 แนวรับ และ 4 ระดับแนวต้าน",
     'placeholder_pattern_match': "🤖 AI Pattern Match: สร้างฐาน.png (ความแม่นยำ: 75.4%)",
     'analysis_title': "📊 ข้อมูลวิเคราะห์สำคัญ",
     'metric_current_price': "ราคาปัจจุบัน",
-    'metric_support_level': "แนวรับ (Support)",
     'tab_search_ticker': "🔍 ค้นหา & วิเคราะห์รายตัว",
     'tab_scan_market': "🚀 สแกนคัดหุ้นทรงสวย",
     'tab_watchlist': "⭐ Watchlist ส่วนตัว",
@@ -189,12 +188,10 @@ def get_company_info_and_holders(ticker):
         stock = yf.Ticker(ticker)
         info = stock.info
         
-        # ข้อมูลบริษัทและธุรกิจ
         eng_summary = info.get('longBusinessSummary', 'N/A')
         th_summary = translate_text_to_thai(eng_summary) if eng_summary != 'N/A' else 'N/A'
         company_name = info.get('longName', ticker)
         
-        # ข้อมูลจำนวนหุ้นและผู้ถือหุ้น
         shares_out = info.get('sharesOutstanding', 0)
         shares_out_str = f"{shares_out:,.0f}" if shares_out else "N/A"
         
@@ -265,19 +262,25 @@ def create_ta_chart(df, ticker, res_data):
     latest_date = df.index[-1]
     earliest_date = df.index[0]
     
-    # แนวรับ
-    sup_val = res_data['Support ($)']
-    fig.add_shape(type="line", x0=earliest_date, y0=sup_val, x1=latest_date, y1=sup_val, line=dict(color="#22C55E", width=2.5, dash='dash'))
-    fig.add_annotation(x=latest_date, y=sup_val, text=f"Support: ${sup_val}", bgcolor="#22C55E", font=dict(color="white"), ax=0, ay=-15)
+    # 3 ระดับแนวรับ (สีเขียวไล่ระดับ)
+    supports = [
+        ('Support 1 ($)', '#22C55E', -15),
+        ('Support 2 ($)', '#16A34A', -15),
+        ('Support 3 ($)', '#15803D', 15)
+    ]
+    for key, color, ay_pos in supports:
+        if key in res_data:
+            val = res_data[key]
+            fig.add_shape(type="line", x0=earliest_date, y0=val, x1=latest_date, y1=val, line=dict(color=color, width=2, dash='dash'))
+            fig.add_annotation(x=latest_date, y=val, text=f"{key.replace(' ($)', '')}: ${val}", bgcolor=color, font=dict(color="white"), ax=0, ay=ay_pos)
 
-    # 4 ระดับแนวต้าน
+    # 4 ระดับแนวต้าน (สีแดง/ส้ม/เหลือง)
     resistances = [
         ('Resist 1 ($)', '#EF4444', -15),
         ('Resist 2 ($)', '#F97316', -15),
         ('Resist 3 ($)', '#EAB308', -15),
         ('Resist 4 ($)', '#991B1B', 15)
     ]
-    
     for key, color, ay_pos in resistances:
         if key in res_data:
             val = res_data[key]
@@ -316,21 +319,31 @@ def check_ma_snr_combo(ticker, info_mode=False):
         latest_close = df['close'].iloc[-1]
         slow_ma = df['close'].rolling(window=50).mean()
 
-        lookback_sup = df.tail(20)
-        support_level = lookback_sup['low'].min()
+        # คำนวณ 3 แนวรับ (Support 1, 2, 3) จากจุดต่ำสุดในอดีตที่อยู่ต่ำกว่าราคาปัจจุบัน
+        lows = df['low'].values
+        lower_lows = sorted(list(set(lows[lows < latest_close])), reverse=True)
+        
+        s1, s2, s3 = latest_close * 0.95, latest_close * 0.90, latest_close * 0.85
+        if len(lower_lows) >= 3:
+            step = max(1, len(lower_lows) // 3)
+            s1 = lower_lows[0] # ใกล้ราคาปัจจุบันที่สุด
+            s2 = lower_lows[min(step, len(lower_lows)-1)]
+            s3 = lower_lows[-1] # ลึกที่สุด
+        elif len(lower_lows) > 0:
+            s1 = lower_lows[0]
+            s3 = lower_lows[-1]
+            s2 = s1 - (s1 - s3) * 0.5
 
-        # คำนวณแนวต้าน 4 ระดับจากสวิงราคาย้อนหลัง
+        # คำนวณ 4 แนวต้าน (Resist 1, 2, 3, 4)
         highs = df['high'].values
         sorted_highs = sorted(list(set(highs[highs > latest_close])), reverse=False)
         
-        # หากลุ่มราคาต้านที่เหมาะสมไล่ระดับขึ้นไป
         r1, r2, r3, r4 = latest_close * 1.05, latest_close * 1.12, latest_close * 1.25, latest_close * 1.40
         if len(sorted_highs) >= 4:
-            # เลือกจุดแบ่งแนวต้านตามลำดับราคาที่สูงขึ้น
-            step = max(1, len(sorted_highs) // 4)
-            r1 = sorted_highs[min(step, len(sorted_highs)-1)]
-            r2 = sorted_highs[min(step*2, len(sorted_highs)-1)]
-            r3 = sorted_highs[min(step*3, len(sorted_highs)-1)]
+            step_r = max(1, len(sorted_highs) // 4)
+            r1 = sorted_highs[min(step_r, len(sorted_highs)-1)]
+            r2 = sorted_highs[min(step_r*2, len(sorted_highs)-1)]
+            r3 = sorted_highs[min(step_r*3, len(sorted_highs)-1)]
             r4 = sorted_highs[-1]
         elif len(sorted_highs) > 0:
             r1 = sorted_highs[0]
@@ -339,18 +352,20 @@ def check_ma_snr_combo(ticker, info_mode=False):
             r3 = r1 + (r4 - r1) * 0.66
 
         recent_3d_low = df['low'].tail(3).min()
-        near_support = recent_3d_low <= (support_level * 1.05)
+        near_support = recent_3d_low <= (s1 * 1.05)
         near_ma50 = recent_3d_low <= (slow_ma.iloc[-1] * 1.02)
 
         if not (near_support or near_ma50):
             return None, df
 
         if latest_close > df['open'].iloc[-1] and df['volume'].iloc[-1] >= 200_000:
-            dist_from_sup = ((latest_close - support_level) / support_level) * 100
+            dist_from_sup = ((latest_close - s1) / s1) * 100
             res_data = {
                 'Ticker': ticker,
                 'Price ($)': round(latest_close, 2),
-                'Support ($)': round(support_level, 2),
+                'Support 1 ($)': round(s1, 2),
+                'Support 2 ($)': round(s2, 2),
+                'Support 3 ($)': round(s3, 2),
                 'Resist 1 ($)': round(r1, 2),
                 'Resist 2 ($)': round(r2, 2),
                 'Resist 3 ($)': round(r3, 2),
@@ -388,7 +403,6 @@ with tab1:
             df_profit = get_financials(single_ticker)
 
             if res:
-                # ส่วนหัวข้อแสดงชื่อย่อและชื่อบริษัทตามที่ขอ
                 company_full_name = res.get("longNameEn", single_ticker)
                 st.markdown(f'<p class="company-header">{single_ticker} : {company_full_name}</p>', unsafe_allow_html=True)
                 st.success(UI_LANG_MAP['success_stock_found_single'].format(ticker=single_ticker) + f' | ข้อมูล ณ วันที่: {res["Date"]}')
@@ -413,6 +427,7 @@ with tab1:
                 st.markdown("---")
                 st.markdown(f"#### {UI_LANG_MAP['analysis_title']}")
                 
+                # แสดงราคาปัจจุบันและ 3 แนวรับ
                 col_m1, col_m2 = st.columns(2)
                 with col_m1:
                     st.markdown(f"""
@@ -422,16 +437,28 @@ with tab1:
                         <div class="fin-card-sub">RSI (14): {res['RSI']}</div>
                     </div>
                     """, unsafe_allow_html=True)
+                    st.markdown(f"""
+                    <div class="fin-card">
+                        <div class="fin-card-label">🛡️ แนวรับ 2</div>
+                        <div class="fin-card-value">${res['Support 2 ($)']}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
                 with col_m2:
                     st.markdown(f"""
                     <div class="fin-card">
-                        <div class="fin-card-label">🛡️ {UI_LANG_MAP['metric_support_level']}</div>
-                        <div class="fin-card-value">${res['Support ($)']}</div>
+                        <div class="fin-card-label">🛡️ แนวรับ 1 (ใกล้สุด)</div>
+                        <div class="fin-card-value">${res['Support 1 ($)']}</div>
                         <div class="fin-card-sub">{res['Dist_Sup (%)']} จากราคาปัจจุบัน</div>
                     </div>
                     """, unsafe_allow_html=True)
+                    st.markdown(f"""
+                    <div class="fin-card">
+                        <div class="fin-card-label">🛡️ แนวรับ 3 (ลึกสุด)</div>
+                        <div class="fin-card-value">${res['Support 3 ($)']}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
-                # แสดง 4 ระดับแนวต้านในรูปแบบการ์ด
+                # แสดง 4 ระดับแนวต้าน
                 col_r1, col_r2 = st.columns(2)
                 with col_r1:
                     st.markdown(f"""
@@ -485,7 +512,6 @@ with tab1:
 
                 st.markdown("---")
                 
-                # แสดงข้อมูลสรุปธุรกิจและโครงสร้างผู้ถือหุ้น (หุ้นทั้งหมด, บริษัทถือ, รายย่อย, อื่นๆ)
                 summary_text = res.get('summaryTh', 'N/A')
                 shares_tot = res.get('sharesOutstanding', 'N/A')
                 inst_pct = res.get('institutionalHeld', 'N/A')
@@ -557,7 +583,7 @@ with tab2:
         st.session_state.scan_results = results
         if results:
             df_result_display = pd.DataFrame([item['res_data'] for item in results])[[
-                'Ticker', 'longNameEn', 'Price ($)', 'Support ($)', 'Dist_Sup (%)', 'RSI', 
+                'Ticker', 'longNameEn', 'Price ($)', 'Support 1 ($)', 'Support 2 ($)', 'Support 3 ($)', 'Dist_Sup (%)', 'RSI', 
                 'Resist 1 ($)', 'Resist 2 ($)', 'Resist 3 ($)', 'Resist 4 ($)', 
                 'sharesOutstanding', 'institutionalHeld', 'retailHeld', 'Volume', 'Date'
             ]]
@@ -571,7 +597,7 @@ with tab2:
         st.subheader('📸 แกลเลอรี่กราฟหุ้นทรงสวย (พร้อมรายละเอียดบริษัทและผู้ถือหุ้น)')
         
         items_per_page = 6
-        total_pages = max(1, (len(results) + items_per_page - 1) / items_per_page)
+        total_pages = max(1, (len(results) + items_per_page - 1) // items_per_page)
         page_num = st.selectbox("เลือกหน้าแสดงผลกราฟ:", range(1, int(total_pages) + 1), key="pagination_select")
         
         start_idx = (page_num - 1) * items_per_page
@@ -595,7 +621,7 @@ with tab2:
                     fig_gallery = create_ta_chart(raw_df_found_gallery, ticker_found, res_data)
                     with cols[col_idx % 2]:
                         st.markdown(f'<p style="font-size:0.95rem; font-weight:bold; color:#60A5FA; margin-bottom:0px;">🟢 {ticker_found} : {co_name} | ${res_data["Price ($)"]}</p>', unsafe_allow_html=True)
-                        st.caption(f"Support: ${res_data['Support ($)']} | ต้าน1: ${res_data['Resist 1 ($)']} | หุ้นทั้งหมด: {shares} | สถาบันถือ: {inst} | รายย่อย: {retail}")
+                        st.caption(f"Support 1: ${res_data['Support 1 ($)']} | ต้าน1: ${res_data['Resist 1 ($)']} | หุ้นทั้งหมด: {shares} | สถาบัน: {inst}")
                         st.plotly_chart(fig_gallery, use_container_width=True)
                         st.markdown("<br>", unsafe_allow_html=True)
                         col_idx += 1
