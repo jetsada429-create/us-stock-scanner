@@ -14,7 +14,7 @@ import plotly.graph_objects as go
 UI_LANG_MAP = {
     'search_ticker_title': "US Stock Scanner PRO",
     'search_ticker_subtitle': "ระบบสแกนเทคนิคอล • คำนวณ % ขาขึ้น • AI Pattern • 3 แนวรับ 4 แนวต้าน",
-    'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB, IREN):",
+    'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB, AAOI, IREN):",
     'btn_analyze_single': "🔎 วิเคราะห์ทันที",
     'btn_scan_market': "🚀 เริ่มสแกนทั้ง 3 ตลาด (7,000+ หุ้น)",
     'status_preparing_tickers': "⏳ กำลังดึงรายชื่อหุ้นทั้งหมดจาก NASDAQ, NYSE, AMEX...",
@@ -234,7 +234,7 @@ st.markdown(
     .c-yellow { color: #FBBF24 !important; }
     .c-darkred { color: #F43F5E !important; }
 
-    /* กล่องการ์ดกลยุทธ์แนวรับแนวตั้ง (Vertical Cards) */
+    /* การ์ดกลยุทธ์แนวรับแนวตั้ง */
     .strategy-card {
         background: #0F172A;
         border: 1px solid #1E293B;
@@ -390,6 +390,95 @@ st.markdown(
 
 st.markdown(f'<div class="main-title">{UI_LANG_MAP["search_ticker_title"]}</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="sub-title">{UI_LANG_MAP["search_ticker_subtitle"]}</div>', unsafe_allow_html=True)
+
+
+def calculate_swing_snr(df, latest_close):
+    """
+    สูตรคำนวณแนวรับ-แนวต้านตามโครงสร้างราคาจริง (Structural Swing SNR):
+    - S1: ฐานราคาระยะสั้น 5-15 วัน (Swing Low ใกล้สุด)
+    - S2: ก้นหลุมพักฐานรอบล่าสุด 30-60 วัน (Major Pullback Trough)
+    - S3: ฐานโครงสร้างใหญ่ 90-180 วัน (Major Cycle Launchpad)
+    """
+    lows = df['low'].values
+    highs = df['high'].values
+    n = len(df)
+
+    # 1. คำนวณแนวรับ (Supports)
+    # S1: Swing Low ใกล้สุด (5-15 วัน)
+    w_15d = lows[-15:] if n >= 15 else lows
+    s1_cand = float(np.min(w_15d))
+    if s1_cand < latest_close * 0.995:
+        s1 = s1_cand
+    else:
+        s1 = latest_close * 0.96
+
+    # S2: ก้นหลุมพักฐานรอบล่าสุด (30-60 วัน) เช่น ก้นหลุมเดือน Jul
+    w_60d = lows[-60:] if n >= 60 else lows
+    # หา Pivot Lows ในช่วง 60 วันที่ต่ำกว่า S1 อย่างน้อย 5%
+    pivots_60d = []
+    start_60 = max(2, n - 60)
+    for i in range(start_60, n - 2):
+        if lows[i] == np.min(lows[max(0, i-3):min(n, i+4)]) and lows[i] < s1 * 0.95:
+            pivots_60d.append(float(lows[i]))
+
+    if pivots_60d:
+        s2 = float(np.max(pivots_60d)) # จุดพักฐานที่ชัดเจนที่สุด
+    else:
+        min_60d = float(np.min(w_60d))
+        if min_60d < s1 * 0.95 and min_60d >= latest_close * 0.70:
+            s2 = min_60d
+        else:
+            s2 = s1 * 0.89  # ถัดลงมา ~11% จาก S1
+
+    # S3: ฐานสะสมโครงสร้างใหญ่ก่อนเริ่มรอบ (90-180 วัน) เช่น ฐานเดือน Feb-Apr
+    w_180d = lows[-180:] if n >= 180 else lows
+    pivots_180d = []
+    start_180 = max(2, n - 180)
+    for i in range(start_180, n - 15):
+        if lows[i] == np.min(lows[max(0, i-4):min(n, i+5)]) and lows[i] < s2 * 0.92:
+            pivots_180d.append(float(lows[i]))
+
+    if pivots_180d:
+        # กรองไม่ให้ลึกไปถึงราคาเปิดตัวยุคแรกเริ่ม (ต้องมีนัยสำคัญกับรอบราคาปัจจุบัน)
+        valid_s3 = [p for p in pivots_180d if p >= latest_close * 0.35]
+        s3 = float(np.median(valid_s3)) if valid_s3 else float(np.max(pivots_180d))
+    else:
+        s3 = s2 * 0.65  # ฐานรับใหญ่ลึกประมาณ 35% จาก S2
+
+    # จัดระเบียบ Hierarchy ป้องกันตัวเลขเพี้ยน
+    if s2 >= s1: s2 = s1 * 0.90
+    if s3 >= s2: s3 = s2 * 0.70
+
+    # 2. คำนวณแนวต้าน (Resistances)
+    # R1: Swing High ระยะสั้น (10-20 วัน)
+    w_20d_h = highs[-20:] if n >= 20 else highs
+    r1_cand = float(np.max(w_20d_h))
+    r1 = r1_cand if r1_cand > latest_close * 1.02 else latest_close * 1.06
+
+    # R4: จุดสูงสุดของรอบใหญ่ (120-250 วัน)
+    w_250d_h = highs[-250:] if n >= 250 else highs
+    r4 = float(np.max(w_250d_h))
+    if r4 <= r1 * 1.08: r4 = r1 * 1.25
+
+    # R2 & R3: แนวต้านระหว่างทาง
+    pivots_h = []
+    start_h = max(2, n - 120)
+    for i in range(start_h, n - 2):
+        if highs[i] == np.max(highs[max(0, i-3):min(n, i+4)]) and highs[i] > r1 * 1.03 and highs[i] < r4 * 0.97:
+            pivots_h.append(float(highs[i]))
+            
+    pivots_h = sorted(list(set(pivots_h)))
+    if len(pivots_h) >= 2:
+        r2 = pivots_h[0]
+        r3 = pivots_h[-1]
+    elif len(pivots_h) == 1:
+        r2 = pivots_h[0]
+        r3 = r2 + (r4 - r2) * 0.5
+    else:
+        r2 = r1 + (r4 - r1) * 0.35
+        r3 = r1 + (r4 - r1) * 0.70
+
+    return round(s1, 2), round(s2, 2), round(s3, 2), round(r1, 2), round(r2, 2), round(r3, 2), round(r4, 2)
 
 
 def calculate_ai_pattern_match(df):
@@ -690,39 +779,11 @@ def check_ma_snr_combo(ticker, info_mode=False):
         fast_ma = df['close'].rolling(window=20).mean()
         slow_ma = df['close'].rolling(window=50).mean()
 
-        lows = df['low'].values
-        lower_lows = sorted(list(set(lows[lows < latest_close])), reverse=True)
-        
-        s1, s2, s3 = latest_close * 0.95, latest_close * 0.90, latest_close * 0.85
-        if len(lower_lows) >= 3:
-            step = max(1, len(lower_lows) // 3)
-            s1 = lower_lows[0]
-            s2 = lower_lows[min(step, len(lower_lows)-1)]
-            s3 = lower_lows[-1]
-        elif len(lower_lows) > 0:
-            s1 = lower_lows[0]
-            s3 = lower_lows[-1]
-            s2 = s1 - (s1 - s3) * 0.5
-
-        highs = df['high'].values
-        sorted_highs = sorted(list(set(highs[highs > latest_close])), reverse=False)
-        
-        r1, r2, r3, r4 = latest_close * 1.05, latest_close * 1.12, latest_close * 1.25, latest_close * 1.40
-        if len(sorted_highs) >= 4:
-            step_r = max(1, len(sorted_highs) // 4)
-            r1 = sorted_highs[min(step_r, len(sorted_highs)-1)]
-            r2 = sorted_highs[min(step_r*2, len(sorted_highs)-1)]
-            r3 = sorted_highs[min(step_r*3, len(sorted_highs)-1)]
-            r4 = sorted_highs[-1]
-        elif len(sorted_highs) > 0:
-            r1 = sorted_highs[0]
-            r4 = sorted_highs[-1]
-            r2 = r1 + (r4 - r1) * 0.33
-            r3 = r1 + (r4 - r1) * 0.66
+        # คำนวณแนวรับ-แนวต้านจาก Swing Pivot Points ที่สมเหตุสมผล
+        s1, s2, s3, r1, r2, r3, r4 = calculate_swing_snr(df, latest_close)
 
         recent_3d_low = df['low'].tail(3).min()
         near_support = recent_3d_low <= (s1 * 1.05)
-        near_ma50 = recent_3d_low <= (slow_ma.iloc[-1] * 1.02)
         is_green_candle = latest_close > df['open'].iloc[-1]
         has_volume = df['volume'].iloc[-1] >= 200_000
 
@@ -732,6 +793,7 @@ def check_ma_snr_combo(ticker, info_mode=False):
         recent_low_8d = df['low'].tail(8).min()
         bounce_8d_pct = ((latest_close - recent_low_8d) / recent_low_8d) * 100
 
+        # คำนวณคะแนนภาพรวมขาขึ้น (Bullish Strength Score 0-100%)
         bull_score = 0
         if latest_close >= fast_ma.iloc[-1]: bull_score += 20
         if latest_close >= slow_ma.iloc[-1]: bull_score += 15
@@ -893,9 +955,9 @@ with tab1:
                     <div class="snr-grid">
                         <div class="snr-card" style="border-left: 3px solid #22C55E;">
                             <div class="snr-card-title c-green">🛡️ แนวรับ (Support)</div>
-                            <div class="snr-row"><span class="snr-lbl">รับ 1 (ใกล้สุด)</span><span class="snr-num c-green">${res['Support 1 ($)']}</span></div>
-                            <div class="snr-row"><span class="snr-lbl">รับ 2 (โซนหลัก)</span><span class="snr-num c-lightgreen">${res['Support 2 ($)']}</span></div>
-                            <div class="snr-row"><span class="snr-lbl">รับ 3 (ลึกสุด)</span><span class="snr-num c-lightgreen">${res['Support 3 ($)']}</span></div>
+                            <div class="snr-row"><span class="snr-lbl">รับ 1 (สวิงโลว์ใกล้สุด)</span><span class="snr-num c-green">${res['Support 1 ($)']}</span></div>
+                            <div class="snr-row"><span class="snr-lbl">รับ 2 (ฐานสะสมหลัก)</span><span class="snr-num c-lightgreen">${res['Support 2 ($)']}</span></div>
+                            <div class="snr-row"><span class="snr-lbl">รับ 3 (ฐานโครงสร้างใหญ่)</span><span class="snr-num c-lightgreen">${res['Support 3 ($)']}</span></div>
                         </div>
                         <div class="snr-card" style="border-left: 3px solid #EF4444;">
                             <div class="snr-card-title c-red">⚡ แนวต้าน (Resistance)</div>
@@ -908,7 +970,7 @@ with tab1:
                 </div>
                 """, unsafe_allow_html=True)
 
-                # ================= การ์ดกลยุทธ์แบ่งไม้เข้าซื้อ (แนวตั้ง อ่านง่ายบนมือถือ ไม่ต้องเลื่อนจอ) =================
+                # การ์ดกลยุทธ์แนวรับแนวตั้ง
                 st.markdown("#### 🎯 กลยุทธ์แบ่งไม้เข้าซื้อ & ประเมินความแข็งแรงของแนวรับ")
                 
                 dist_s1 = ((res['Support 1 ($)'] - res['Price ($)']) / res['Price ($)']) * 100
@@ -947,7 +1009,7 @@ with tab1:
                 <div class="strategy-card" style="border-left: 4px solid #15803D;">
                     <div class="strat-header">
                         <div>
-                            <span class="strat-title">🛡️ แนวรับ 3 (แนวรับจิตวิทยาใหญ่)</span>
+                            <span class="strat-title">🛡️ แนวรับ 3 (ฐานโครงสร้างใหญ่)</span>
                             <span style="font-size:0.75rem; color:#94A3B8; margin-left:6px;">({dist_s3:+.2f}%)</span>
                         </div>
                         <span class="strat-price" style="color:#86EFAC;">${res['Support 3 ($)']}</span>
