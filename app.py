@@ -14,7 +14,7 @@ import plotly.graph_objects as go
 # ================= ส่วนตั้งค่าแอปและภาษา =================
 UI_LANG_MAP = {
     'search_ticker_title': "US Stock Scanner PRO (Enterprise Edition)",
-    'search_ticker_subtitle': "ระบบสแกนทางเทคนิค พร้อม RSI, Watchlist และแจ้งเตือนผ่าน Messenger",
+    'search_ticker_subtitle': "ระบบสแกนทางเทคนิค พร้อม RSI, Watchlist, แนวต้านแบบ Swing High และแจ้งเตือน",
     'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB):",
     'btn_analyze_single': "🔎 วิเคราะห์ทันที",
     'btn_scan_market': "🚀 เริ่มสแกนทั้ง 3 ตลาด (7,000+ หุ้น)",
@@ -24,13 +24,13 @@ UI_LANG_MAP = {
     'success_stock_found_single': "🟢 หุ้น **{ticker}** ผ่านเงื่อนไขสแกนสัญญาณ BUY!",
     'error_stock_not_found_single': "🔴 หุ้น **{ticker}** ไม่ติดเงื่อนไขสัญญาณซื้อในขณะนี้",
     'expander_business_summary': "📖 สรุปธุรกิจ (แปลไทยอัตโนมัติ)",
-    'chart_title_single': "📈 กราฟเทคนิคแนวรับ-แนวต้าน",
+    'chart_title_single': "📈 กราฟเทคนิคแนวรับ-แนวต้าน (Static Swing High)",
     'placeholder_pattern_match': "🤖 AI Pattern Match: สร้างฐาน.png (ความแม่นยำ: 75.4%)",
     'analysis_title': "📊 ข้อมูลวิเคราะห์สำคัญ",
     'metric_current_price': "ราคาปัจจุบัน",
     'metric_support_level': "แนวรับ (Support)",
-    'metric_resistance_1': "แนวต้าน 1",
-    'metric_resistance_2': "แนวต้าน 2 (Highเดิม)",
+    'metric_resistance_1': "แนวต้าน 1 (Static Swing High)",
+    'metric_resistance_2': "แนวต้าน 2 (High เดิม)",
     'tab_search_ticker': "🔍 ค้นหา & วิเคราะห์รายตัว",
     'tab_scan_market': "🚀 สแกนคัดหุ้นทรงสวย",
     'tab_watchlist': "⭐ Watchlist ส่วนตัว",
@@ -43,9 +43,13 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# จัดการ Session State สำหรับ Watchlist
+# จัดการ Session State สำหรับ Watchlist และผลการสแกนตลาด
 if 'watchlist' not in st.session_state:
     st.session_state.watchlist = []
+if 'scan_results' not in st.session_state:
+    st.session_state.scan_results = None
+if 'scan_df' not in st.session_state:
+    st.session_state.scan_df = None
 
 # Modern FinTech UI Custom CSS Design
 st.markdown(
@@ -193,7 +197,6 @@ def translate_text_to_thai(text):
 
 
 def send_messenger_alert(message, webhook_url):
-    """ฟังก์ชันส่งแจ้งเตือนไปยัง Facebook Messenger ผ่าน Webhook (เช่น Make.com / Zapier)"""
     if not webhook_url:
         return
     try:
@@ -307,7 +310,6 @@ def check_ma_snr_combo(ticker, info_mode=False):
 
         df.columns = [col.lower() for col in df.columns]
         
-        # คำนวณค่า RSI (14) เพิ่มเติม
         delta = df['close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -320,13 +322,21 @@ def check_ma_snr_combo(ticker, info_mode=False):
 
         lookback_sup = df.tail(20)
         support_level = lookback_sup['low'].min()
-        resistance_1 = lookback_sup['high'].max()
-        
-        lookback_res2 = df.iloc[-61:-1]
-        resistance_2 = lookback_res2['high'].max()
-        if resistance_2 <= resistance_1 * 1.01:
-             early_lookback = df.iloc[-61:-21]
-             resistance_2 = early_lookback['high'].max() if not early_lookback.empty else resistance_1 * 1.10
+
+        historical_res1 = df.iloc[-40:-10]
+        if not historical_res1.empty:
+            resistance_1 = historical_res1['high'].max()
+        else:
+            resistance_1 = df.tail(20)['high'].max()
+
+        lookback_res2 = df.iloc[-90:-40]
+        if not lookback_res2.empty:
+            resistance_2 = lookback_res2['high'].max()
+        else:
+            resistance_2 = resistance_1 * 1.10
+
+        if resistance_2 <= resistance_1:
+            resistance_2 = resistance_1 * 1.10
 
         recent_3d_low = df['low'].tail(3).min()
         near_support = recent_3d_low <= (support_level * 1.05)
@@ -381,13 +391,16 @@ with tab1:
                 st.markdown(f'<p class="company-header">{res.get("longName", "N/A")}</p>', unsafe_allow_html=True)
                 st.success(UI_LANG_MAP['success_stock_found_single'].format(ticker=single_ticker) + f' | ข้อมูล ณ วันที่: {res["Date"]}')
                 
-                # ปุ่มบันทึก Watchlist ส่วนตัว
                 if single_ticker not in st.session_state.watchlist:
                     if st.button(f"⭐ เพิ่ม {single_ticker} เข้า Watchlist"):
                         st.session_state.watchlist.append(single_ticker)
                         st.success(f"เพิ่ม {single_ticker} สำเร็จ!")
+                        st.rerun()
                 else:
-                    st.info(f"📌 หุ้น {Ticker := single_ticker} อยู่ใน Watchlist ของคุณแล้ว")
+                    if st.button(f"🗑️ ลบ {single_ticker} ออกจาก Watchlist"):
+                        st.session_state.watchlist.remove(single_ticker)
+                        st.rerun()
+                    st.info(f"📌 หุ้น {single_ticker} อยู่ใน Watchlist ของคุณแล้ว")
 
                 if raw_df is not None:
                     st.markdown(f"#### {UI_LANG_MAP['chart_title_single']}")
@@ -470,10 +483,21 @@ with tab1:
 with tab2:
     st.markdown("### 🚀 สแกนหาหุ้นทรงสวยประจำวัน (ทั้งตลาด NASDAQ, NYSE, AMEX)")
     
-    # เพิ่มช่องใส่ Webhook สำหรับส่งแจ้งเตือนเข้า Messenger
     messenger_webhook = st.text_input("🔗 Facebook Messenger / Webhook URL (ใส่หรือไม่ใส่ก็ได้):", value="", placeholder="https://hooks.zapier.com/hooks/catch/...")
     
-    scan_btn = st.button(UI_LANG_MAP['btn_scan_market'])
+    # สร้างปุ่มควบคุมการสแกนและปุ่มรีเซ็ตให้อยู่คู่กัน
+    col_btn1, col_btn2 = st.columns([3, 1])
+    with col_btn1:
+        scan_btn = st.button(UI_LANG_MAP['btn_scan_market'])
+    with col_btn2:
+        reset_btn = st.button("🔄 รีเซ็ตข้อมูลสแกน")
+
+    # ถ้ากดปุ่มรีเซ็ต ให้ล้างข้อมูลใน Session State ทันที
+    if reset_btn:
+        st.session_state.scan_results = None
+        st.session_state.scan_df = None
+        st.success("ล้างข้อมูลการสแกนเรียบร้อยแล้ว สามารถกดเริ่มสแกนใหม่ได้เลยครับ")
+        st.rerun()
 
     if scan_btn:
         status_text = st.empty()
@@ -497,7 +521,6 @@ with tab2:
                     if res_data_found:
                         results.append({'res_data': res_data_found, 'raw_df': raw_df_found})
                         
-                        # ส่งแจ้งเตือนอัตโนมัติทันทีที่เจอหุ้นถ้ากรอก Webhook ไว้
                         if messenger_webhook:
                             msg = f"🚨 สัญญาณซื้อหุ้น {res_data_found['Ticker']} | ราคา: ${res_data_found['Price ($)']} | แนวรับ: ${res_data_found['Support ($)']}"
                             send_messenger_alert(msg, messenger_webhook)
@@ -506,65 +529,85 @@ with tab2:
 
         status_text.empty()
         st.success(f'✅ สแกนเสร็จสิ้น! พบหุ้นทรงสวยเข้าเงื่อนไขทั้งหมด {len(results)} ตัว')
-
+        
+        # บันทึกผลลัพธ์ลง Session State คงอยู่ตลอดจนกว่าจะกดปุ่มรีเซ็ต
+        st.session_state.scan_results = results
         if results:
             df_result_display = pd.DataFrame([item['res_data'] for item in results])[['Ticker', 'Price ($)', 'Support ($)', 'Dist_Sup (%)', 'RSI', 'Resist 1 ($)', 'Resist 2 ($)', 'Volume', 'Date']]
-            
-            st.markdown("---")
-            st.subheader('📸 แกลเลอรี่กราฟหุ้นทรงสวย (แบ่งหน้าแสดงผลเพื่อความเร็ว)')
-            
-            # ระบบ Pagination (แบ่งหน้าแสดงผลกราฟละ 6 ตัว)
-            items_per_page = 6
-            total_pages = max(1, (len(results) + items_per_page - 1) // items_per_page)
-            page_num = st.selectbox("เลือกหน้าแสดงผลกราฟ:", range(1, total_pages + 1))
-            
-            start_idx = (page_num - 1) * items_per_page
-            end_idx = start_idx + items_per_page
-            current_page_items = results[start_idx:end_idx]
+            st.session_state.scan_df = df_result_display
 
-            cols = st.columns(2)
-            col_idx = 0
+    # แสดงผลแกลเลอรี่และตารางจาก Session State อย่างต่อเนื่อง
+    if st.session_state.scan_results:
+        results = st.session_state.scan_results
+        df_result_display = st.session_state.scan_df
 
-            with st.spinner('กำลังวาดกราฟเทคนิคสำหรับแกลเลอรี่...'):
-                for item in current_page_items:
-                    ticker_found = item['res_data']['Ticker']
-                    raw_df_found_gallery = item['raw_df']
-                    res_data_found_gallery = item['res_data']
+        st.markdown("---")
+        st.subheader('📸 แกลเลอรี่กราฟหุ้นทรงสวย (ข้อมูลคงอยู่ตลอดจนกว่าจะกดรีเซ็ต)')
+        
+        items_per_page = 6
+        total_pages = max(1, (len(results) + items_per_page - 1) // items_per_page)
+        page_num = st.selectbox("เลือกหน้าแสดงผลกราฟ:", range(1, total_pages + 1), key="pagination_select")
+        
+        start_idx = (page_num - 1) * items_per_page
+        end_idx = start_idx + items_per_page
+        current_page_items = results[start_idx:end_idx]
 
-                    if raw_df_found_gallery is not None:
-                        fig_gallery = create_ta_chart(raw_df_found_gallery, ticker_found, res_data_found_gallery)
-                        with cols[col_idx % 2]:
-                            st.markdown(f'<p style="font-size:0.95rem; font-weight:bold; color:#60A5FA; margin-bottom:0px;">🟢 {ticker_found} | Price: ${res_data_found_gallery["Price ($)"]}</p>', unsafe_allow_html=True)
-                            st.caption(f"Support: ${res_data_found_gallery['Support ($)']} | RSI: {res_data_found_gallery['RSI']}")
-                            st.plotly_chart(fig_gallery, use_container_width=True)
-                            st.markdown("<br>", unsafe_allow_html=True)
-                            col_idx += 1
+        cols = st.columns(2)
+        col_idx = 0
 
-            st.markdown("---")
-            st.markdown("#### 📊 ตารางสรุปสัญญาณราคาและแนวรับ-ต้าน")
-            st.dataframe(df_result_display, use_container_width=True, hide_index=True, height=200)
-            st.download_button(
-                label='📥 ดาวน์โหลด Watchlist วันนี้ (CSV)',
-                data=df_result_display.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig'),
-                file_name=f'us_watchlist_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv',
-            )
+        with st.spinner('กำลังวาดกราฟเทคนิคสำหรับแกลเลอรี่...'):
+            for item in current_page_items:
+                ticker_found = item['res_data']['Ticker']
+                raw_df_found_gallery = item['raw_df']
+                res_data_found_gallery = item['res_data']
+
+                if raw_df_found_gallery is not None:
+                    fig_gallery = create_ta_chart(raw_df_found_gallery, ticker_found, res_data_found_gallery)
+                    with cols[col_idx % 2]:
+                        st.markdown(f'<p style="font-size:0.95rem; font-weight:bold; color:#60A5FA; margin-bottom:0px;">🟢 {ticker_found} | Price: ${res_data_found_gallery["Price ($)"]}</p>', unsafe_allow_html=True)
+                        st.caption(f"Support: ${res_data_found_gallery['Support ($)']} | RSI: {res_data_found_gallery['RSI']}")
+                        st.plotly_chart(fig_gallery, use_container_width=True)
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        col_idx += 1
+
+        st.markdown("---")
+        st.markdown("#### 📊 ตารางสรุปสัญญาณราคาและแนวรับ-ต้าน")
+        st.dataframe(df_result_display, use_container_width=True, hide_index=True, height=200)
+        st.download_button(
+            label='📥 ดาวน์โหลด Watchlist วันนี้ (CSV)',
+            data=df_result_display.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig'),
+            file_name=f'us_watchlist_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv',
+        )
 
 
 # --- TAB 3: Watchlist ส่วนตัว ---
 with tab3:
     st.markdown("### ⭐ รายชื่อหุ้นใน Watchlist ส่วนตัวของคุณ")
     if st.session_state.watchlist:
-        st.write(f"หุ้นที่คุณติดตามอยู่ทั้งหมด: {', '.join(st.session_state.watchlist)}")
         if st.button("🗑️ ล้างรายชื่อ Watchlist ทั้งหมด"):
             st.session_state.watchlist = []
             st.rerun()
         
-        # แสดงข้อมูลย่อของหุ้นใน Watchlist
+        st.write(f"หุ้นที่คุณติดตามอยู่ทั้งหมด: {', '.join(st.session_state.watchlist)}")
+        st.markdown("---")
+        
         for w_ticker in st.session_state.watchlist:
-            w_res, w_df = check_ma_snr_combo(w_ticker, info_mode=False)
-            if w_res:
-                st.info(f"📌 **{w_ticker}** | ราคาปัจจุบัน: **${w_res['Price ($5)'] if 'Price ($5)' in w_res else w_res['Price ($)']}** | แนวรับ: ${w_res['Support ($)']}")
-            else:
-                st.warning(f"📌 **{w_ticker}** | ดึงข้อมูลราคาปัจจุบันได้ปกติ แต่ยังไม่เข้าเงื่อนไขแนวรับหลักในวันนี้")
+            try:
+                stock = yf.Ticker(w_ticker)
+                df_w = stock.history(period='5d')
+                if not df_w.empty:
+                    curr_price = round(df_w['Close'].iloc[-1], 2)
+                    prev_close = df_w['Close'].iloc[-2] if len(df_w) > 1 else curr_price
+                    change = round(((curr_price - prev_close) / prev_close) * 100, 2)
+                    
+                    st.markdown(f"""
+                    <div class="fin-card">
+                        <b>📌 {w_ticker}</b> | ราคาปัจจุบัน: <b>${curr_price}</b> ({change:+.2f}%)
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.warning(f"📌 **{w_ticker}** | ไม่สามารถดึงข้อมูลราคาได้ในขณะนี้")
+            except Exception:
+                st.warning(f"📌 **{w_ticker}** | เกิดข้อผิดพลาดในการเชื่อมต่อข้อมูล")
     else:
         st.info("ยังไม่มีหุ้นใน Watchlist ส่วนตัว ลองค้นหาหุ้นรายตัวแล้วกดปุ่มเพิ่มได้เลยครับ!")
