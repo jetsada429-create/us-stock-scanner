@@ -6,6 +6,8 @@ import cv2
 import numpy as np
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util import Retry
 from skimage.metrics import structural_similarity as ssim
 import streamlit as st
 import yfinance as yf
@@ -55,12 +57,36 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+# จัดการ Global Session สำหรับ yfinance เพื่อแก้ปัญหา Rate Limit (429)
+@st.cache_resource
+def get_yfinance_session():
+    session = requests.Session()
+    session.headers.update({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+    })
+    retries = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504]
+    )
+    session.mount('https://', HTTPAdapter(max_retries=retries))
+    session.mount('http://', HTTPAdapter(max_retries=retries))
+    return session
+
+# จัดการ Server State ส่วนกลางสำหรับแชร์ผลการสแกนและล็อกปุ่มเมื่อมีคนใช้งาน
+@st.cache_resource
+def get_global_server_state():
+    return {
+        "is_scanning": False,
+        "latest_results": None,
+        "latest_df": None,
+        "last_scanned_at": None
+    }
+
+server_state = get_global_server_state()
+
 if 'watchlist' not in st.session_state:
     st.session_state.watchlist = []
-if 'scan_results' not in st.session_state:
-    st.session_state.scan_results = None
-if 'scan_df' not in st.session_state:
-    st.session_state.scan_df = None
 
 # Custom CSS
 st.markdown(
@@ -244,7 +270,7 @@ def translate_text_to_thai(text):
 @st.cache_data(ttl=3600)
 def get_company_info_and_holders(ticker):
     try:
-        stock = yf.Ticker(ticker)
+        stock = yf.Ticker(ticker, session=get_yfinance_session())
         info = stock.info
         
         eng_summary = info.get('longBusinessSummary', 'N/A')
@@ -295,7 +321,7 @@ def get_company_info_and_holders(ticker):
 
 def get_financials(ticker):
     try:
-        stock = yf.Ticker(ticker)
+        stock = yf.Ticker(ticker, session=get_yfinance_session())
         q_financials = stock.quarterly_financials
         if q_financials is not None and 'Net Income' in q_financials.index:
             net_income = q_financials.loc['Net Income'].head(3)
@@ -372,7 +398,7 @@ def create_ta_chart(df, ticker, res_data):
 
 def check_ma_snr_combo(ticker, info_mode=False):
     try:
-        stock = yf.Ticker(ticker)
+        stock = yf.Ticker(ticker, session=get_yfinance_session())
         df = stock.history(period='2y', interval='1d')
         if len(df) < 50 or df['Close'].iloc[-1] < 0.5:
             return None, None
@@ -508,7 +534,7 @@ with tab1:
                 st.markdown("---")
                 st.markdown(f"#### {UI_LANG_MAP['analysis_title']}")
                 
-                # แสดงการ์ดแบบเรียงลำดับแถวต่อแถว
+                # แสดงการ์ดแบบเรียงลำดับแถวต่อแถวเพื่อความถูกต้องบนมือถือ
                 col_m1, col_m2 = st.columns(2)
                 with col_m1:
                     st.markdown(f"""
@@ -633,19 +659,26 @@ with tab1:
 with tab2:
     st.markdown("### 🚀 สแกนหาหุ้นทรงสวยประจำวัน (ทั้งตลาด NASDAQ, NYSE, AMEX)")
     
+    is_busy = server_state["is_scanning"]
+    
     col_btn1, col_btn2 = st.columns([3, 1])
     with col_btn1:
-        scan_btn = st.button(UI_LANG_MAP['btn_scan_market'])
+        scan_btn = st.button(UI_LANG_MAP['btn_scan_market'], disabled=is_busy)
     with col_btn2:
-        reset_btn = st.button("🔄 รีเซ็ตข้อมูลสแกน")
+        reset_btn = st.button("🔄 รีเซ็ตข้อมูลสแกน", disabled=is_busy)
 
-    if reset_btn:
-        st.session_state.scan_results = None
-        st.session_state.scan_df = None
-        st.success("ล้างข้อมูลการสแกนเรียบร้อยแล้ว")
+    if is_busy:
+        st.warning("⏳ **ขณะนี้มีผู้ใช้งานท่านอื่นกำลังสแกนทั้งตลาดอยู่** ระบบกำลังประมวลผลให้ส่วนกลาง กรุณารอประมาณ 1-2 นาที จากนั้นผลลัพธ์จะแสดงขึ้นมาโดยอัตโนมัติครับ")
+
+    if reset_btn and not is_busy:
+        server_state["latest_results"] = None
+        server_state["latest_df"] = None
+        server_state["last_scanned_at"] = None
+        st.success("ล้างข้อมูลการสแกนส่วนกลางเรียบร้อยแล้ว")
         st.rerun()
 
-    if scan_btn:
+    if scan_btn and not is_busy:
+        server_state["is_scanning"] = True
         status_text = st.empty()
         status_text.info(UI_LANG_MAP['status_preparing_tickers'])
         stock_list = get_us_stock_tickers()
@@ -655,35 +688,43 @@ with tab2:
         results = []
         count = 0
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
-            futures = {executor.submit(check_ma_snr_combo, ticker, True): ticker for ticker in stock_list}
-            for future in concurrent.futures.as_completed(futures):
-                count += 1
-                if count % 20 == 0 or count == total_stocks:
-                    progress_bar.progress(count / total_stocks)
-                    status_text.text(UI_LANG_MAP['status_scanning'].format(count=count, total=total_stocks))
-                try:
-                    res_data_found, raw_df_found = future.result()
-                    if res_data_found and raw_df_found is not None:
-                        results.append({'res_data': res_data_found, 'raw_df': raw_df_found})
-                except Exception:
-                    pass
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
+                futures = {executor.submit(check_ma_snr_combo, ticker, True): ticker for ticker in stock_list}
+                for future in concurrent.futures.as_completed(futures):
+                    count += 1
+                    if count % 20 == 0 or count == total_stocks:
+                        progress_bar.progress(count / total_stocks)
+                        status_text.text(UI_LANG_MAP['status_scanning'].format(count=count, total=total_stocks))
+                    try:
+                        res_data_found, raw_df_found = future.result()
+                        if res_data_found and raw_df_found is not None:
+                            results.append({'res_data': res_data_found, 'raw_df': raw_df_found})
+                    except Exception:
+                        pass
+        finally:
+            server_state["is_scanning"] = False
 
         status_text.empty()
         st.success(f'✅ สแกนเสร็จสิ้น! พบหุ้นทรงสวยเข้าเงื่อนไขทั้งหมด {len(results)} ตัว')
         
-        st.session_state.scan_results = results
+        server_state["latest_results"] = results
+        server_state["last_scanned_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         if results:
             df_result_display = pd.DataFrame([item['res_data'] for item in results])[[
                 'Ticker', 'longNameEn', 'sectorTh', 'Price ($)', 'Support 1 ($)', 'Support 2 ($)', 'Support 3 ($)', 'Dist_Sup (%)', 'RSI', 
                 'Resist 1 ($)', 'Resist 2 ($)', 'Resist 3 ($)', 'Resist 4 ($)', 
                 'sharesOutstanding', 'institutionalHeld', 'retailHeld', 'Volume', 'Date'
             ]]
-            st.session_state.scan_df = df_result_display
+            server_state["latest_df"] = df_result_display
+        st.rerun()
 
-    if st.session_state.scan_results:
-        results = st.session_state.scan_results
-        df_result_display = st.session_state.scan_df
+    if server_state["latest_results"]:
+        results = server_state["latest_results"]
+        df_result_display = server_state["latest_df"]
+
+        if server_state.get("last_scanned_at"):
+            st.info(f"🕒 ผลการสแกนล่าสุดของเซิร์ฟเวอร์ ณ เวลา: **{server_state['last_scanned_at']}** (ทุกคนในระบบสามารถดูร่วมกันได้ทันที)")
 
         st.markdown("---")
         st.subheader('📸 แกลเลอรี่กราฟหุ้นทรงสวย (พร้อมรายละเอียดบริษัทและ AI Pattern Match)')
@@ -748,7 +789,7 @@ with tab3:
         
         for w_ticker in st.session_state.watchlist:
             try:
-                stock = yf.Ticker(w_ticker)
+                stock = yf.Ticker(w_ticker, session=get_yfinance_session())
                 df_w = stock.history(period='5d')
                 if not df_w.empty:
                     curr_price = round(df_w['Close'].iloc[-1], 2)
