@@ -14,12 +14,13 @@ import plotly.graph_objects as go
 UI_LANG_MAP = {
     'search_ticker_title': "US Stock Scanner PRO",
     'search_ticker_subtitle': "ระบบสแกนเทคนิคอล • คำนวณ % ขาขึ้น • AI Pattern • 3 แนวรับ 4 แนวต้าน",
-    'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB):",
+    'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB, IREN):",
     'btn_analyze_single': "🔎 วิเคราะห์ทันที",
     'btn_scan_market': "🚀 เริ่มสแกนทั้ง 3 ตลาด (7,000+ หุ้น)",
     'status_preparing_tickers': "⏳ กำลังดึงรายชื่อหุ้นทั้งหมดจาก NASDAQ, NYSE, AMEX...",
     'status_scanning': "⏳ สแกนไปแล้ว {count}/{total} ตัว...",
     'status_analyzing_single': "⏳ กำลังดึงข้อมูลและวิเคราะห์ {ticker}...",
+    'expander_business_summary': "📖 สรุปธุรกิจ & โครงสร้างผู้ถือหุ้น (แปลไทยอัตโนมัติ)",
     'chart_title_single': "📈 กราฟเทคนิค 3 แนวรับ และ 4 ระดับแนวต้าน",
     'analysis_title': "📊 ข้อมูลแนวรับ - แนวต้าน & ตัวชี้วัดสำคัญ",
     'tab_search_ticker': "🔍 ค้นหา & วิเคราะห์รายตัว",
@@ -126,7 +127,6 @@ st.markdown(
         transform: translateY(-1px);
     }
     
-    /* กล่อง Compact Board */
     .compact-board {
         background: #0B132B;
         border: 1px solid #1E293B;
@@ -192,7 +192,6 @@ st.markdown(
         border: 1px solid #78350F;
     }
 
-    /* Grid แนวรับ-แนวต้าน */
     .snr-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -234,6 +233,49 @@ st.markdown(
     .c-orange { color: #F97316 !important; }
     .c-yellow { color: #FBBF24 !important; }
     .c-darkred { color: #F43F5E !important; }
+
+    /* กล่องการ์ดกลยุทธ์แนวรับแนวตั้ง (Vertical Cards) */
+    .strategy-card {
+        background: #0F172A;
+        border: 1px solid #1E293B;
+        border-radius: 8px;
+        padding: 8px 12px;
+        margin-bottom: 6px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    .strat-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 4px;
+    }
+    .strat-title {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #F8FAFC;
+    }
+    .strat-price {
+        font-size: 0.95rem;
+        font-weight: 800;
+        color: #38BDF8;
+    }
+    .strat-body {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.74rem;
+        padding-top: 4px;
+        border-top: 1px dashed #1E293B;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    .strat-sub {
+        color: #94A3B8;
+    }
+    .strat-val {
+        color: #F8FAFC;
+        font-weight: 600;
+    }
 
     .company-header {
         font-size: 1.15rem;
@@ -312,7 +354,6 @@ st.markdown(
         margin-top: 2px;
     }
     
-    /* แก้ปัญหาช่องว่างซ้อนทับบนมือถือ */
     .desktop-only-space {
         height: 28px;
         display: block;
@@ -353,25 +394,28 @@ st.markdown(f'<div class="sub-title">{UI_LANG_MAP["search_ticker_subtitle"]}</di
 
 def calculate_ai_pattern_match(df):
     try:
-        if df is None or len(df) < 30:
-            return "สร้างฐาน.png", 72.5
+        if df is None or len(df) < 15:
+            return "สร้างฐานสะสมกำลัง.png", 75.0
 
-        closes = df['close'].tail(30).values
+        bars = min(len(df), 25)
+        closes = df['close'].tail(bars).values
         c_min, c_max = np.min(closes), np.max(closes)
         if c_max == c_min:
-            return "สร้างฐานกรอบแคบ.png", 88.0
+            return "สร้างฐานสะสมกำลัง.png", 82.0
         norm_closes = (closes - c_min) / (c_max - c_min)
         
-        x = np.linspace(0, 1, 30)
+        x = np.linspace(0, 1, bars)
+        
         templates = {
-            "สร้างฐานสะสมกำลัง.png": np.full(30, 0.45) + np.sin(x * 6 * np.pi) * 0.08,
-            "สร้างฐานยก Low.png": 0.2 + 0.6 * x + np.sin(x * 4 * np.pi) * 0.05,
-            "สร้างฐานก้นกระทะ (Rounding).png": 0.8 - 0.7 * np.sin(x * np.pi),
-            "สร้างฐานแบบ Double Bottom.png": 0.5 - 0.4 * np.abs(np.sin(x * 2 * np.pi))
+            "สร้างฐานยก Low.png": 0.15 + 0.75 * x + 0.08 * np.sin(x * 3 * np.pi),
+            "สร้างฐานแบบ Double Bottom.png": 0.65 - 0.65 * np.sin(x * np.pi) + 0.25 * np.cos(x * 2 * np.pi),
+            "สร้างฐานก้นกระทะ (Rounding).png": 0.85 - 0.85 * np.sin(x * np.pi),
+            "สร้างฐานสะสมกำลัง.png": np.full(bars, 0.5) + 0.08 * np.sin(x * 5 * np.pi),
+            "ดีดตัวกลับตัวรูปตัว V (V-Shape).png": np.where(x < 0.55, 1.0 - 1.6 * x, 0.12 + 2.0 * (x - 0.55))
         }
 
-        best_pattern = "สร้างฐาน.png"
-        best_score = 65.0
+        best_pattern = "สร้างฐานสะสมกำลัง.png"
+        best_score = 60.0
 
         for pat_name, pat_curve in templates.items():
             norm_pat = (pat_curve - np.min(pat_curve)) / (np.max(pat_curve) - np.min(pat_curve) + 1e-6)
@@ -380,15 +424,15 @@ def calculate_ai_pattern_match(df):
             if np.isnan(corr):
                 corr = 0.5
             
-            sim_score = (max(0.0, 1.0 - mae) * 0.6 + max(0.0, (corr + 1.0) / 2.0) * 0.4) * 100.0
+            sim_score = (max(0.0, 1.0 - mae) * 0.65 + max(0.0, (corr + 1.0) / 2.0) * 0.35) * 100.0
             if sim_score > best_score:
                 best_score = sim_score
                 best_pattern = pat_name
 
-        final_score = round(max(68.5, min(94.8, best_score)), 1)
+        final_score = round(max(70.0, min(95.5, best_score)), 1)
         return best_pattern, final_score
     except Exception:
-        return "สร้างฐาน.png", 73.2
+        return "สร้างฐานสะสมกำลัง.png", 76.5
 
 
 def get_time_elapsed_thai(last_dt):
@@ -571,7 +615,6 @@ def create_ta_chart(df, ticker, res_data):
     latest_date = df.index[-1]
     earliest_date = df.index[0]
     
-    # วางป้ายข้อความแบบเว้นระยะห่าง ป้องกันการเกยทับกัน 100%
     supports = [
         ('Support 1 ($)', '#22C55E', -12),
         ('Support 2 ($)', '#16A34A', 12),
@@ -611,7 +654,6 @@ def create_ta_chart(df, ticker, res_data):
 
     fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
 
-    # ปรับ margin-right ให้มีพื้นที่สำหรับข้อความป้ายราคา
     fig.update_layout(
         xaxis_rangeslider_visible=False,
         template='plotly_dark',
@@ -684,32 +726,38 @@ def check_ma_snr_combo(ticker, info_mode=False):
         is_green_candle = latest_close > df['open'].iloc[-1]
         has_volume = df['volume'].iloc[-1] >= 200_000
 
-        # คำนวณคะแนนภาพรวมขาขึ้น (Bullish Strength Score 0-100%)
+        recent_high_8d = df['high'].tail(8).max()
+        pullback_8d_pct = ((latest_close - recent_high_8d) / recent_high_8d) * 100
+        
+        recent_low_8d = df['low'].tail(8).min()
+        bounce_8d_pct = ((latest_close - recent_low_8d) / recent_low_8d) * 100
+
         bull_score = 0
         if latest_close >= fast_ma.iloc[-1]: bull_score += 20
-        if latest_close >= slow_ma.iloc[-1]: bull_score += 20
-        if fast_ma.iloc[-1] >= slow_ma.iloc[-1]: bull_score += 20
-        if 45 <= latest_rsi <= 70: bull_score += 15
-        if latest_close > s1: bull_score += 15
-        if df['volume'].iloc[-1] > df['volume'].rolling(20).mean().iloc[-1]: bull_score += 10
-        bullish_pct = min(96.5, max(8.5, round(bull_score * 0.9 + 5.0, 1)))
+        if latest_close >= slow_ma.iloc[-1]: bull_score += 15
+        if fast_ma.iloc[-1] >= slow_ma.iloc[-1]: bull_score += 15
+        if 48 <= latest_rsi <= 70: bull_score += 15
+        elif latest_rsi > 70: bull_score += 10
+        if bounce_8d_pct >= 3.0: bull_score += 20
+        if df['volume'].iloc[-1] > df['volume'].rolling(20).mean().iloc[-1]: bull_score += 15
+        
+        bullish_pct = min(96.0, max(12.0, round(bull_score * 0.9 + 5.0, 1)))
 
-        # ประเมินสถานะแนวโน้ม
-        if near_support and is_green_candle and has_volume and bullish_pct >= 60:
+        if (near_support or bounce_8d_pct >= 2.5) and is_green_candle and (bullish_pct >= 65 or bounce_8d_pct >= 5.0):
             trend_status = "BUY_SIGNAL"
-            status_desc = "🟢 ผ่านเงื่อนไขสัญญาณ BUY (จุดเข้าซื้อต้นรอบ)"
+            status_desc = "🟢 ผ่านเงื่อนไขสัญญาณ BUY (ดีดตัวกลับตัวจากแนวรับ)"
+        elif bounce_8d_pct >= 3.0:
+            trend_status = "REVERSAL_BOUNCE"
+            status_desc = "🟡 หุ้นกำลังฟอร์มตัวกลับตัว/เด้งจากแนวรับ (Reversal Bounce)"
         elif bullish_pct >= 50:
             trend_status = "PULLBACK"
-            status_desc = "🟡 กำลังย่อตัว/พักฐานในแนวโน้มขาขึ้น (Buy on Dip)"
+            status_desc = "🟠 กำลังย่อตัว/พักฐานระยะสั้น (Buy on Dip)"
         elif latest_rsi < 35:
             trend_status = "OVERSOLD"
             status_desc = "🟣 ขายมากเกินไป (Oversold) ลุ้นเด้งกลับตัวที่แนวรับ"
         else:
             trend_status = "DOWNTREND"
             status_desc = "🔴 โครงสร้างชะลอตัว/แนวโน้มขาลง (รอสร้างฐานที่แนวรับ)"
-
-        recent_high_60d = df['high'].tail(60).max()
-        drawdown_pct = ((latest_close - recent_high_60d) / recent_high_60d) * 100
 
         dist_from_sup = ((latest_close - s1) / s1) * 100
         pat_name, pat_score = calculate_ai_pattern_match(df)
@@ -734,7 +782,8 @@ def check_ma_snr_combo(ticker, info_mode=False):
             'bearish_pct': round(100.0 - bullish_pct, 1),
             'trend_status': trend_status,
             'status_desc': status_desc,
-            'drawdown_pct': f'{drawdown_pct:.2f}%'
+            'pullback_8d_pct': f'{pullback_8d_pct:.2f}%',
+            'bounce_8d_pct': f'+{bounce_8d_pct:.2f}%'
         }
 
         if info_mode:
@@ -742,7 +791,7 @@ def check_ma_snr_combo(ticker, info_mode=False):
             res_data.update(co_info)
 
         if not info_mode:
-            if not (trend_status == "BUY_SIGNAL"):
+            if not (trend_status in ["BUY_SIGNAL", "REVERSAL_BOUNCE"]):
                 return None, df
 
         return res_data, df
@@ -786,14 +835,17 @@ with tab1:
                 st.markdown(f'<p class="company-header">{single_ticker} : {company_full_name}</p>', unsafe_allow_html=True)
                 st.markdown(f'<div class="sector-badge">🏷️ กลุ่มธุรกิจ: {sector_desc} | ย่อย: {industry_desc}</div>', unsafe_allow_html=True)
                 
+                # แสดงผลสถานะแนวโน้ม
                 if t_status == "BUY_SIGNAL":
-                    st.success(f"{res['status_desc']} | ข้อมูล ณ วันที่: {res['Date']}")
+                    st.success(f"{res['status_desc']} (ดีดตัวจากก้น {res['bounce_8d_pct']}) | ณ วันที่: {res['Date']}")
+                elif t_status == "REVERSAL_BOUNCE":
+                    st.success(f"{res['status_desc']} (ดีดตัวขึ้นจากก้นล่าสุด {res['bounce_8d_pct']} | ย่อจาก High 8 วัน {res['pullback_8d_pct']}) | ณ วันที่: {res['Date']}")
                 elif t_status == "PULLBACK":
-                    st.warning(f"{res['status_desc']} (ย่อตัวจากยอด {res['drawdown_pct']}) | ข้อมูล ณ วันที่: {res['Date']}")
+                    st.warning(f"{res['status_desc']} (ย่อตัวจาก High 8 วัน {res['pullback_8d_pct']}) | ณ วันที่: {res['Date']}")
                 elif t_status == "OVERSOLD":
-                    st.info(f"{res['status_desc']} (RSI: {res['RSI']}) | ข้อมูล ณ วันที่: {res['Date']}")
+                    st.info(f"{res['status_desc']} (RSI: {res['RSI']}) | ณ วันที่: {res['Date']}")
                 else:
-                    st.error(f"{res['status_desc']} (ย่อตัวจากยอด {res['drawdown_pct']}) | ข้อมูล ณ วันที่: {res['Date']}")
+                    st.error(f"{res['status_desc']} (ย่อตัวจาก High 8 วัน {res['pullback_8d_pct']}) | ณ วันที่: {res['Date']}")
 
                 # ปุ่ม Watchlist
                 if single_ticker not in st.session_state.watchlist:
@@ -815,7 +867,7 @@ with tab1:
                     if fig:
                         st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG, key=f"chart_single_{single_ticker}")
                     
-                    pat_name = res.get('pattern_name', 'สร้างฐาน.png')
+                    pat_name = res.get('pattern_name', 'สร้างฐานสะสมกำลัง.png')
                     pat_score = res.get('pattern_score', 75.0)
                     st.markdown(f'<div class="pattern-box">😊 🤖 AI Pattern Match: {pat_name} (ความแม่นยำ: {pat_score}%)</div>', unsafe_allow_html=True)
 
@@ -833,9 +885,9 @@ with tab1:
                             <span class="price-main">${res['Price ($)']}</span>
                         </div>
                         <div class="price-badge-group">
-                            <span class="price-badge {trend_badge_class}">📈 ขาขึ้น: {bull_pct}%</span>
+                            <span class="price-badge {trend_badge_class}">📈 ขาขึ้น/กลับตัว: {bull_pct}%</span>
+                            <span class="price-badge badge-dist">ดีดจากก้น 8 วัน: {res['bounce_8d_pct']}</span>
                             <span class="price-badge badge-rsi">RSI: {res['RSI']}</span>
-                            <span class="price-badge badge-dist">ห่างรับ 1: {res['Dist_Sup (%)']}</span>
                         </div>
                     </div>
                     <div class="snr-grid">
@@ -856,34 +908,59 @@ with tab1:
                 </div>
                 """, unsafe_allow_html=True)
 
-                # ตารางกลยุทธ์แบ่งไม้เข้าซื้อ
+                # ================= การ์ดกลยุทธ์แบ่งไม้เข้าซื้อ (แนวตั้ง อ่านง่ายบนมือถือ ไม่ต้องเลื่อนจอ) =================
                 st.markdown("#### 🎯 กลยุทธ์แบ่งไม้เข้าซื้อ & ประเมินความแข็งแรงของแนวรับ")
-                df_strategy = pd.DataFrame([
-                    {
-                        "ระดับแนวรับ": "🛡️ แนวรับ 1 (สวิงโลว์ใกล้สุด)",
-                        "ราคา ($)": f"${res['Support 1 ($)']}",
-                        "ระยะห่าง": f"{((res['Support 1 ($)'] - res['Price ($)'])/res['Price ($)'])*100:+.2f}%",
-                        "ความแข็งแรง": "⭐️⭐️ ปานกลาง",
-                        "กลยุทธ์แบ่งไม้": "25% (ไม้หยั่งเชิง)"
-                    },
-                    {
-                        "ระดับแนวรับ": "🛡️ แนวรับ 2 (ฐานสะสมหลัก)",
-                        "ราคา ($)": f"${res['Support 2 ($)']}",
-                        "ระยะห่าง": f"{((res['Support 2 ($)'] - res['Price ($)'])/res['Price ($)'])*100:+.2f}%",
-                        "ความแข็งแรง": "⭐️⭐️⭐️⭐️ แข็งแกร่ง",
-                        "กลยุทธ์แบ่งไม้": "35% (ไม้หลักสะสม)"
-                    },
-                    {
-                        "ระดับแนวรับ": "🛡️ แนวรับ 3 (แนวรับจิตวิทยาใหญ่)",
-                        "ราคา ($)": f"${res['Support 3 ($)']}",
-                        "ระยะห่าง": f"{((res['Support 3 ($)'] - res['Price ($)'])/res['Price ($)'])*100:+.2f}%",
-                        "ความแข็งแรง": "⭐️⭐️⭐️⭐️⭐️ แข็งแกร่งมาก",
-                        "กลยุทธ์แบ่งไม้": "40% (ไม้สะสมใหญ่)"
-                    }
-                ])
-                st.dataframe(df_strategy, use_container_width=True, hide_index=True)
+                
+                dist_s1 = ((res['Support 1 ($)'] - res['Price ($)']) / res['Price ($)']) * 100
+                dist_s2 = ((res['Support 2 ($)'] - res['Price ($)']) / res['Price ($)']) * 100
+                dist_s3 = ((res['Support 3 ($)'] - res['Price ($)']) / res['Price ($)']) * 100
+
+                st.markdown(f"""
+                <div class="strategy-card" style="border-left: 4px solid #22C55E;">
+                    <div class="strat-header">
+                        <div>
+                            <span class="strat-title">🛡️ แนวรับ 1 (สวิงโลว์ใกล้สุด)</span>
+                            <span style="font-size:0.75rem; color:#94A3B8; margin-left:6px;">({dist_s1:+.2f}%)</span>
+                        </div>
+                        <span class="strat-price" style="color:#22C55E;">${res['Support 1 ($)']}</span>
+                    </div>
+                    <div class="strat-body">
+                        <div><span class="strat-sub">ความแข็งแรง:</span> <span class="strat-val">⭐⭐ ปานกลาง</span></div>
+                        <div><span class="strat-sub">กลยุทธ์:</span> <span class="strat-val c-green">25% (ไม้หยั่งเชิง / ดูแรงเด้ง)</span></div>
+                    </div>
+                </div>
+
+                <div class="strategy-card" style="border-left: 4px solid #16A34A;">
+                    <div class="strat-header">
+                        <div>
+                            <span class="strat-title">🛡️ แนวรับ 2 (ฐานสะสมหลัก)</span>
+                            <span style="font-size:0.75rem; color:#94A3B8; margin-left:6px;">({dist_s2:+.2f}%)</span>
+                        </div>
+                        <span class="strat-price" style="color:#4ADE80;">${res['Support 2 ($)']}</span>
+                    </div>
+                    <div class="strat-body">
+                        <div><span class="strat-sub">ความแข็งแรง:</span> <span class="strat-val">⭐⭐⭐⭐ แข็งแกร่ง</span></div>
+                        <div><span class="strat-sub">กลยุทธ์:</span> <span class="strat-val c-lightgreen">35% (ไม้หลักสะสมของ)</span></div>
+                    </div>
+                </div>
+
+                <div class="strategy-card" style="border-left: 4px solid #15803D;">
+                    <div class="strat-header">
+                        <div>
+                            <span class="strat-title">🛡️ แนวรับ 3 (แนวรับจิตวิทยาใหญ่)</span>
+                            <span style="font-size:0.75rem; color:#94A3B8; margin-left:6px;">({dist_s3:+.2f}%)</span>
+                        </div>
+                        <span class="strat-price" style="color:#86EFAC;">${res['Support 3 ($)']}</span>
+                    </div>
+                    <div class="strat-body">
+                        <div><span class="strat-sub">ความแข็งแรง:</span> <span class="strat-val">⭐⭐⭐⭐⭐ แข็งแกร่งมาก</span></div>
+                        <div><span class="strat-sub">กลยุทธ์:</span> <span class="strat-val" style="color:#86EFAC;">40% (ไม้สะสมลึก / กลับตัวใหญ่)</span></div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
                 # ข่าวสารล่าสุด
+                st.markdown("<br>", unsafe_allow_html=True)
                 st.markdown("#### 📰 ข่าวสารล่าสุด & ปัจจัยกระทบ (แปลไทยอัตโนมัติ)")
                 if news_items:
                     for news in news_items:
@@ -928,8 +1005,9 @@ with tab1:
                 inst_pct = res.get('institutionalHeld', 'N/A')
                 insider_pct = res.get('insiderHeld', 'N/A')
                 retail_pct = res.get('retailHeld', 'N/A')
+                expander_title = UI_LANG_MAP.get('expander_business_summary', "📖 สรุปธุรกิจ & โครงสร้างผู้ถือหุ้น (แปลไทยอัตโนมัติ)")
 
-                with st.expander(UI_LANG_MAP['expander_business_summary'], expanded=True):
+                with st.expander(expander_title, expanded=True):
                     st.markdown(f"""
                     <div class="fin-card">
                         <b style="color: #60A5FA; font-size: 0.88rem;">📊 โครงสร้างผู้ถือหุ้น & ข้อมูลบริษัท:</b>
@@ -952,7 +1030,7 @@ with tab1:
                 st.error(f"❌ ไม่พบข้อมูลสัญลักษณ์หุ้น **{single_ticker}** ในระบบ กรุณาตรวจสอบชื่อ Ticker อีกครั้ง")
 
 
-# --- TAB 2: สแกนคัดหุ้นทั้งตลาด (จัดลูปแบบแถวต่อแถว ป้องกันสลับฝั่งบนมือถือ) ---
+# --- TAB 2: สแกนคัดหุ้นทั้งตลาด ---
 with tab2:
     st.markdown("### 🚀 สแกนหาหุ้นทรงสวยประจำวัน (ทั้งตลาด NASDAQ, NYSE, AMEX)")
     
@@ -1011,7 +1089,7 @@ with tab2:
         server_state["last_scanned_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         if results:
             df_result_display = pd.DataFrame([item['res_data'] for item in results])[[
-                'Ticker', 'Price ($)', 'bullish_pct', 'Support 1 ($)', 'Support 2 ($)', 'Support 3 ($)', 'Dist_Sup (%)', 'RSI', 
+                'Ticker', 'Price ($)', 'bullish_pct', 'bounce_8d_pct', 'Support 1 ($)', 'Support 2 ($)', 'Support 3 ($)', 'RSI', 
                 'Resist 1 ($)', 'Resist 2 ($)', 'Resist 3 ($)', 'Resist 4 ($)', 
                 'Volume', 'Date'
             ]]
@@ -1037,7 +1115,6 @@ with tab2:
         end_idx = start_idx + items_per_page
         current_page_items = results[start_idx:end_idx]
 
-        # สร้างคอลัมน์ทีละคู่ เพื่อให้เรียงลำดับถูกต้อง 100% ทั้งมือถือและคอม
         for row_idx in range(0, len(current_page_items), 2):
             cols = st.columns(2)
             for c_offset in range(2):
@@ -1048,10 +1125,11 @@ with tab2:
                     ticker_found = res_data['Ticker']
                     raw_df_found = item.get('raw_df')
                     b_pct = res_data.get('bullish_pct', 70.0)
+                    bounce_str = res_data.get('bounce_8d_pct', '+0.0%')
 
                     with cols[c_offset]:
                         with st.container():
-                            st.markdown(f'<p style="font-size:0.92rem; font-weight:bold; color:#60A5FA; margin-bottom:0px;">🟢 {ticker_found} (ขาขึ้น {b_pct}%)</p>', unsafe_allow_html=True)
+                            st.markdown(f'<p style="font-size:0.92rem; font-weight:bold; color:#60A5FA; margin-bottom:0px;">🟢 {ticker_found} (ขาขึ้น {b_pct}% | เด้ง {bounce_str})</p>', unsafe_allow_html=True)
                             st.caption(f"Support 1: ${res_data['Support 1 ($)']} | ต้าน 1: ${res_data['Resist 1 ($)']} | RSI: {res_data['RSI']}")
                             
                             if ticker_found not in st.session_state.watchlist:
@@ -1065,7 +1143,7 @@ with tab2:
                                 if fig_gallery:
                                     st.plotly_chart(fig_gallery, use_container_width=True, config=PLOTLY_CONFIG, key=f"gallery_chart_{ticker_found}_{page_num}_{item_idx}")
                                 
-                                pat_name = res_data.get('pattern_name', 'สร้างฐาน.png')
+                                pat_name = res_data.get('pattern_name', 'สร้างฐานสะสมกำลัง.png')
                                 pat_score = res_data.get('pattern_score', 75.0)
                                 st.markdown(f'<div class="pattern-box" style="font-size:0.72rem; padding:3px 6px;">😊 🤖 AI Pattern: {pat_name} ({pat_score}%)</div>', unsafe_allow_html=True)
                             else:
