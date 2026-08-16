@@ -1,3 +1,4 @@
+
 import concurrent.futures
 from datetime import datetime
 import os
@@ -14,7 +15,7 @@ import plotly.graph_objects as go
 # ================= ส่วนตั้งค่าแอปและภาษา =================
 UI_LANG_MAP = {
     'search_ticker_title': "US Stock Scanner PRO (Enterprise Edition)",
-    'search_ticker_subtitle': "ระบบสแกนทางเทคนิค พร้อม 3 แนวรับ, 4 แนวต้าน และโครงสร้างผู้ถือหุ้น",
+    'search_ticker_subtitle': "ระบบสแกนทางเทคนิค พร้อมเลือก Timeframe, 3 แนวรับ, 4 แนวต้าน และ AI Pattern Match",
     'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB):",
     'btn_analyze_single': "🔎 วิเคราะห์ทันที",
     'btn_scan_market': "🚀 เริ่มสแกนทั้ง 3 ตลาด (7,000+ หุ้น)",
@@ -125,6 +126,17 @@ st.markdown(
         border: 1px solid #334155;
         margin-bottom: 0.4rem;
         line-height: 1.4;
+    }
+    .pattern-box {
+        background-color: #EFF6FF;
+        color: #1E40AF;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        border: 1px solid #BFDBFE;
+        margin-top: 8px;
+        margin-bottom: 8px;
     }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
@@ -245,7 +257,23 @@ def get_financials(ticker):
     return None
 
 
-def create_ta_chart(df, ticker, res_data):
+def fetch_stock_data(ticker, timeframe):
+    """ฟังก์ชันดึงข้อมูลตาม Timeframe ที่เลือก (H1, H4, D, W)"""
+    stock = yf.Ticker(ticker)
+    if timeframe == 'H1':
+        df = stock.history(period='60d', interval='1h')
+    elif timeframe == 'H4':
+        df = stock.history(period='60d', interval='1h')
+        if not df.empty:
+            df = df.resample('4h').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'}).dropna()
+    elif timeframe == 'W':
+        df = stock.history(period='2y', interval='1wk')
+    else:  # Daily (D)
+        df = stock.history(period='1y', interval='1d')
+    return df
+
+
+def create_ta_chart(df, ticker, res_data, timeframe):
     fig = go.Figure(data=[go.Candlestick(
         x=df.index,
         open=df['open'], high=df['high'],
@@ -262,7 +290,7 @@ def create_ta_chart(df, ticker, res_data):
     latest_date = df.index[-1]
     earliest_date = df.index[0]
     
-    # 3 ระดับแนวรับ (สีเขียวไล่ระดับ)
+    # 3 แนวรับ
     supports = [
         ('Support 1 ($)', '#22C55E', -15),
         ('Support 2 ($)', '#16A34A', -15),
@@ -274,7 +302,7 @@ def create_ta_chart(df, ticker, res_data):
             fig.add_shape(type="line", x0=earliest_date, y0=val, x1=latest_date, y1=val, line=dict(color=color, width=2, dash='dash'))
             fig.add_annotation(x=latest_date, y=val, text=f"{key.replace(' ($)', '')}: ${val}", bgcolor=color, font=dict(color="white"), ax=0, ay=ay_pos)
 
-    # 4 ระดับแนวต้าน (สีแดง/ส้ม/เหลือง)
+    # 4 แนวต้าน
     resistances = [
         ('Resist 1 ($)', '#EF4444', -15),
         ('Resist 2 ($)', '#F97316', -15),
@@ -288,7 +316,7 @@ def create_ta_chart(df, ticker, res_data):
             fig.add_annotation(x=latest_date, y=val, text=f"{key.replace(' ($)', '')}: ${val}", bgcolor=color, font=dict(color="white"), ax=0, ay=ay_pos)
 
     fig.update_layout(
-        title=f'<b>{ticker}</b> | ราคาปัจจุบัน: <b>${res_data["Price ($)"]}</b> (RSI: {res_data.get("RSI", 0)})',
+        title=f'<b>{ticker}</b> [{timeframe}] | ราคาปัจจุบัน: <b>${res_data["Price ($)"]}</b> (RSI: {res_data.get("RSI", 0)})',
         xaxis_rangeslider_visible=False,
         template='plotly_dark',
         margin=dict(l=10, r=10, t=35, b=10),
@@ -300,11 +328,10 @@ def create_ta_chart(df, ticker, res_data):
     return fig
 
 
-def check_ma_snr_combo(ticker, info_mode=False):
+def check_ma_snr_combo(ticker, timeframe='D', info_mode=False):
     try:
-        stock = yf.Ticker(ticker)
-        df = stock.history(period='1y', interval='1d')
-        if len(df) < 60 or df['Close'].iloc[-1] < 0.5:
+        df = fetch_stock_data(ticker, timeframe)
+        if len(df) < 50 or df['Close'].iloc[-1] < 0.5:
             return None, df
 
         df.columns = [col.lower() for col in df.columns]
@@ -319,22 +346,20 @@ def check_ma_snr_combo(ticker, info_mode=False):
         latest_close = df['close'].iloc[-1]
         slow_ma = df['close'].rolling(window=50).mean()
 
-        # คำนวณ 3 แนวรับ (Support 1, 2, 3) จากจุดต่ำสุดในอดีตที่อยู่ต่ำกว่าราคาปัจจุบัน
         lows = df['low'].values
         lower_lows = sorted(list(set(lows[lows < latest_close])), reverse=True)
         
         s1, s2, s3 = latest_close * 0.95, latest_close * 0.90, latest_close * 0.85
         if len(lower_lows) >= 3:
             step = max(1, len(lower_lows) // 3)
-            s1 = lower_lows[0] # ใกล้ราคาปัจจุบันที่สุด
+            s1 = lower_lows[0]
             s2 = lower_lows[min(step, len(lower_lows)-1)]
-            s3 = lower_lows[-1] # ลึกที่สุด
+            s3 = lower_lows[-1]
         elif len(lower_lows) > 0:
             s1 = lower_lows[0]
             s3 = lower_lows[-1]
             s2 = s1 - (s1 - s3) * 0.5
 
-        # คำนวณ 4 แนวต้าน (Resist 1, 2, 3, 4)
         highs = df['high'].values
         sorted_highs = sorted(list(set(highs[highs > latest_close])), reverse=False)
         
@@ -390,16 +415,19 @@ tab1, tab2, tab3 = st.tabs([UI_LANG_MAP['tab_search_ticker'], UI_LANG_MAP['tab_s
 # --- TAB 1: ค้นหาหุ้นรายตัว ---
 with tab1:
     st.markdown("### 🔍 ตรวจสอบสัญญาณเทคนิคและพื้นฐานรายตัว")
-    col_in1, col_in2 = st.columns([3, 1])
+    
+    col_in1, col_in_tf, col_in2 = st.columns([2, 1, 1])
     with col_in1:
         single_ticker = st.text_input(UI_LANG_MAP['search_ticker_label'], value='').strip().upper()
+    with col_in_tf:
+        selected_tf = st.selectbox("เลือก Timeframe:", ['D', 'H1', 'H4', 'W'], index=0, key="tf_single")
     with col_in2:
         st.markdown("<br>", unsafe_allow_html=True)
         search_btn = st.button(UI_LANG_MAP['btn_analyze_single'])
 
     if search_btn and single_ticker:
         with st.spinner(UI_LANG_MAP['status_analyzing_single'].format(ticker=single_ticker)):
-            res, raw_df = check_ma_snr_combo(single_ticker, info_mode=True)
+            res, raw_df = check_ma_snr_combo(single_ticker, timeframe=selected_tf, info_mode=True)
             df_profit = get_financials(single_ticker)
 
             if res:
@@ -420,14 +448,14 @@ with tab1:
 
                 if raw_df is not None:
                     st.markdown(f"#### {UI_LANG_MAP['chart_title_single']}")
-                    fig = create_ta_chart(raw_df, single_ticker, res)
+                    fig = create_ta_chart(raw_df, single_ticker, res, selected_tf)
                     st.plotly_chart(fig, use_container_width=True)
-                    st.info(UI_LANG_MAP['placeholder_pattern_match'])
+                    # ข้อความ AI Pattern Match จากรูปที่ 1
+                    st.markdown(f'<div class="pattern-box">😊 {UI_LANG_MAP["placeholder_pattern_match"]}</div>', unsafe_allow_html=True)
 
                 st.markdown("---")
                 st.markdown(f"#### {UI_LANG_MAP['analysis_title']}")
                 
-                # แสดงราคาปัจจุบันและ 3 แนวรับ
                 col_m1, col_m2 = st.columns(2)
                 with col_m1:
                     st.markdown(f"""
@@ -458,7 +486,6 @@ with tab1:
                     </div>
                     """, unsafe_allow_html=True)
 
-                # แสดง 4 ระดับแนวต้าน
                 col_r1, col_r2 = st.columns(2)
                 with col_r1:
                     st.markdown(f"""
@@ -541,10 +568,14 @@ with tab1:
 with tab2:
     st.markdown("### 🚀 สแกนหาหุ้นทรงสวยประจำวัน (ทั้งตลาด NASDAQ, NYSE, AMEX)")
     
-    col_btn1, col_btn2 = st.columns([3, 1])
+    col_tf_scan, col_btn1, col_btn2 = st.columns([1, 2, 1])
+    with col_tf_scan:
+        scan_tf = st.selectbox("เลือก Timeframe สแกน:", ['D', 'H1', 'H4', 'W'], index=0, key="tf_scan")
     with col_btn1:
+        st.markdown("<br>", unsafe_allow_html=True)
         scan_btn = st.button(UI_LANG_MAP['btn_scan_market'])
     with col_btn2:
+        st.markdown("<br>", unsafe_allow_html=True)
         reset_btn = st.button("🔄 รีเซ็ตข้อมูลสแกน")
 
     if reset_btn:
@@ -564,7 +595,7 @@ with tab2:
         count = 0
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
-            futures = {executor.submit(check_ma_snr_combo, ticker, True): ticker for ticker in stock_list}
+            futures = {executor.submit(check_ma_snr_combo, ticker, scan_tf, True): ticker for ticker in stock_list}
             for future in concurrent.futures.as_completed(futures):
                 count += 1
                 if count % 20 == 0 or count == total_stocks:
@@ -573,7 +604,7 @@ with tab2:
                 try:
                     res_data_found, raw_df_found = future.result()
                     if res_data_found:
-                        results.append({'res_data': res_data_found, 'raw_df': raw_df_found})
+                        results.append({'res_data': res_data_found, 'raw_df': raw_df_found, 'tf': scan_tf})
                 except Exception:
                     pass
 
@@ -594,7 +625,7 @@ with tab2:
         df_result_display = st.session_state.scan_df
 
         st.markdown("---")
-        st.subheader('📸 แกลเลอรี่กราฟหุ้นทรงสวย (พร้อมรายละเอียดบริษัทและผู้ถือหุ้น)')
+        st.subheader('📸 แกลเลอรี่กราฟหุ้นทรงสวย (พร้อมรายละเอียดบริษัทและ AI Pattern Match)')
         
         items_per_page = 6
         total_pages = max(1, (len(results) + items_per_page - 1) // items_per_page)
@@ -616,13 +647,16 @@ with tab2:
                 inst = res_data.get('institutionalHeld', 'N/A')
                 retail = res_data.get('retailHeld', 'N/A')
                 raw_df_found_gallery = item['raw_df']
+                item_tf = item.get('tf', 'D')
 
                 if raw_df_found_gallery is not None:
-                    fig_gallery = create_ta_chart(raw_df_found_gallery, ticker_found, res_data)
+                    fig_gallery = create_ta_chart(raw_df_found_gallery, ticker_found, res_data, item_tf)
                     with cols[col_idx % 2]:
                         st.markdown(f'<p style="font-size:0.95rem; font-weight:bold; color:#60A5FA; margin-bottom:0px;">🟢 {ticker_found} : {co_name} | ${res_data["Price ($)"]}</p>', unsafe_allow_html=True)
                         st.caption(f"Support 1: ${res_data['Support 1 ($)']} | ต้าน1: ${res_data['Resist 1 ($)']} | หุ้นทั้งหมด: {shares} | สถาบัน: {inst}")
                         st.plotly_chart(fig_gallery, use_container_width=True)
+                        # ใส่กล่อง AI Pattern Match ใต้กราฟแกลเลอรี่ทุกตัว
+                        st.markdown(f'<div class="pattern-box" style="font-size:0.75rem; padding:4px 8px;">😊 {UI_LANG_MAP["placeholder_pattern_match"]}</div>', unsafe_allow_html=True)
                         st.markdown("<br>", unsafe_allow_html=True)
                         col_idx += 1
 
