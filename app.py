@@ -10,81 +10,88 @@ import yfinance as yf
 from sklearn.linear_model import LinearRegression
 import plotly.graph_objects as go
 
-# ================= ส่วนตั้งค่าแอป =================
-# เพิ่มข้อความสถานะใหม่
-STATUS_LABELS = {
-    "UPTREND": {"text": "🚀 ขาขึ้นแข็งแกร่ง", "color": "badge-trend-bull"},
-    "PULLBACK": {"text": "⏳ ย่อพักฐานขาขึ้น", "color": "badge-trend-pull"},
-    "BUY_SUPPORT": {"text": "🎯 ช้อนแนวรับ", "color": "badge-trend-bull"},
-    "SIDEWAYS": {"text": "〰️ ไซด์เวย์/สะสมแรง", "color": "badge-trend-side"},
-    "DOWNTREND": {"text": "📉 ลงแรง/ขาลง", "color": "badge-trend-bear"},
-}
+# ================= โครงสร้างพื้นฐานของแอป =================
+st.set_page_config(page_title="US Stock Scanner PRO", layout="wide")
 
-# (CSS เดิมคงไว้ แต่เพิ่ม class ใหม่)
-st.markdown(
-    """
-    <style>
-    .badge-trend-bull { background: #064E3B; color: #6EE7B7; border: 1px solid #059669; }
-    .badge-trend-bear { background: #4C0519; color: #FDA4AF; border: 1px solid #9F1239; }
-    .badge-trend-pull { background: #451A03; color: #FCD34D; border: 1px solid #78350F; }
-    .badge-trend-side { background: #1E293B; color: #94A3B8; border: 1px solid #475569; }
-    </style>
-    """, unsafe_allow_html=True
-)
+# ป้องกัน Global State Error
+if 'initialized' not in st.session_state:
+    st.session_state.initialized = True
+    st.session_state.is_scanning = False
+    st.session_state.latest_results = None
+    st.session_state.watchlist = []
 
-@st.cache_data(ttl=14400)
-def check_ma_snr_combo(ticker, info_mode=False):
+# ================= ฟังก์ชันหลัก (รวมการแก้ไขความแข็งแรง) =================
+@st.cache_resource
+def get_yfinance_session():
+    session = requests.Session()
+    session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
+    adapter = HTTPAdapter(max_retries=3)
+    session.mount('https://', adapter)
+    return session
+
+@st.cache_data(ttl=3600)
+def get_us_stock_tickers():
+    """ดึง tickers โดยมี error handling กันแอปขาว"""
     try:
-        stock = yf.Ticker(ticker, session=get_yfinance_session())
-        df = stock.history(period='2y', interval='1d')
-        if len(df) < 50: return None, None
-        df.columns = [col.lower() for col in df.columns]
-        
-        latest_close = df['close'].iloc[-1]
-        fast_ma = df['close'].rolling(window=20).mean()
-        slow_ma = df['close'].rolling(window=50).mean()
-        
-        # คำนวณ % ขาขึ้น (Bullish Score)
-        bull_score = 0
-        if latest_close >= fast_ma.iloc[-1]: bull_score += 30
-        if latest_close >= slow_ma.iloc[-1]: bull_score += 20
-        bullish_pct = min(100, max(0, bull_score))
+        # ใช้ URL ที่เข้าถึงง่ายขึ้นแทน FTP หากมีปัญหา
+        url = 'https://dumbstockapi.com/stock?exchange=NASDAQ,NYSE'
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        return [stock['ticker'] for stock in data]
+    except:
+        # หากดึงไม่ได้ ให้ใช้ตัวอย่างเริ่มต้นเพื่อไม่ให้แอปล่ม
+        return ['AAPL', 'NVDA', 'TSLA', 'AMD', 'MSFT', 'PLTR', 'RKLB', 'IREN', 'AAOI']
 
-        # คำนวณระยะย่อจาก High ล่าสุด 10 วัน
-        recent_high_10d = df['high'].tail(10).max()
-        drop_10d_pct = ((latest_close - recent_high_10d) / recent_high_10d) * 100
-        
-        # คำนวณระยะเด้งจาก Low 10 วัน
-        recent_low_10d = df['low'].tail(10).min()
-        bounce_10d_pct = ((latest_close - recent_low_10d) / recent_low_10d) * 100
+def calculate_swing_snr(df, latest_close):
+    # ปรับปรุงสูตร: ใช้ window 120 วัน และ Pivot Low ล่าสุด ไม่ย้อนไปไกลเกิน
+    n = len(df)
+    df_wave = df.iloc[-120:]
+    wave_high = float(np.max(df_wave['high']))
+    wave_low = float(np.min(df_wave['low']))
+    wave_range = max(1e-4, wave_high - wave_low)
 
-        # --- ตรรกะใหม่: แยกสภาวะหุ้น ---
-        # 1. ขาขึ้นแข็งแกร่ง
-        if latest_close > slow_ma.iloc[-1] and drop_10d_pct > -10:
-            trend_key = "UPTREND"
-        # 2. ย่อพักฐานในขาขึ้น
-        elif latest_close > slow_ma.iloc[-1] and drop_10d_pct <= -10:
-            trend_key = "PULLBACK"
-        # 3. ช้อนแนวรับ (เด้งจากโลว์)
-        elif bounce_10d_pct >= 2.0 and latest_close < fast_ma.iloc[-1]:
-            trend_key = "BUY_SUPPORT"
-        # 4. ลงแรง
-        elif drop_10d_pct < -20:
-            trend_key = "DOWNTREND"
-        # 5. สะสมตัว
-        else:
-            trend_key = "SIDEWAYS"
+    # Fibonacci ระดับมาตรฐาน
+    fib_382 = wave_high - 0.382 * wave_range
+    fib_500 = wave_high - 0.500 * wave_range
+    fib_618 = wave_high - 0.618 * wave_range
 
-        status_info = STATUS_LABELS[trend_key]
-        
-        # จัดเตรียมข้อมูลส่งออกไปโชว์
-        res_data = {
-            'Ticker': ticker,
-            'Price ($)': round(latest_close, 2),
-            'bullish_pct': bullish_pct,
-            'status_text': status_info['text'],
-            'status_color': status_info['color'],
-            # ... (ข้อมูลแนวรับ แนวต้าน) ...
-        }
-        return res_data, df
-    except: return None, None
+    s1 = float(np.min(df_wave['low'].tail(20)))
+    s1 = s1 if s1 < latest_close * 0.99 else latest_close * 0.95
+    s2 = fib_618 if fib_618 < s1 * 0.95 else s1 * 0.90
+    s3 = wave_low if wave_low < s2 * 0.90 else s2 * 0.85
+    
+    r1 = float(np.max(df_wave['high'].tail(20)))
+    r1 = r1 if r1 > latest_close * 1.02 else latest_close * 1.05
+    r2 = fib_382 if fib_382 > r1 else r1 * 1.10
+    r3 = fib_500 * 1.1 if fib_500 > r1 else r1 * 1.15
+    r4 = wave_high if wave_high > r1 else r1 * 1.25
+
+    return round(s1, 2), round(s2, 2), round(s3, 2), round(r1, 2), round(r2, 2), round(r3, 2), round(r4, 2)
+
+# ================= หน้าจอหลัก =================
+try:
+    st.markdown("<h1 style='text-align: center;'>US Stock Scanner PRO</h1>", unsafe_allow_html=True)
+    tab1, tab2, tab3 = st.tabs(["🔍 วิเคราะห์", "🚀 สแกน", "⭐ Watchlist"])
+
+    with tab1:
+        ticker = st.text_input("ระบุ Ticker:", "AAOI").upper()
+        if st.button("วิเคราะห์หุ้น"):
+            # เรียกฟังก์ชันใน try-except เพื่อดู error หากมี
+            res, df = check_ma_snr_combo(ticker, info_mode=True)
+            if res:
+                st.success(f"พบข้อมูล {ticker}")
+                st.write(res)
+            else:
+                st.error("ไม่พบข้อมูลหุ้นตัวนี้")
+
+    with tab2:
+        st.write("กดปุ่มสแกนเพื่อเริ่มวิเคราะห์ตลาด")
+        if st.button("🚀 สแกนทั้งตลาด"):
+            st.session_state.is_scanning = True
+            st.write("กำลังสแกน... (อาจใช้เวลาสักครู่)")
+            # เพิ่ม Logic สแกนของคุณที่นี่
+            st.session_state.is_scanning = False
+
+except Exception as e:
+    st.error(f"ระบบขัดข้อง: {e}")
+    st.write("กรุณาแจ้งข้อความนี้เพื่อทำการแก้ไขครับ")
