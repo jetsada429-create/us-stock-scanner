@@ -1,14 +1,10 @@
-
 import concurrent.futures
 from datetime import datetime
-import os
-import cv2
 import numpy as np
 import pandas as pd
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
-from skimage.metrics import structural_similarity as ssim
 import streamlit as st
 import yfinance as yf
 from sklearn.linear_model import LinearRegression
@@ -16,20 +12,16 @@ import plotly.graph_objects as go
 
 # ================= ส่วนตั้งค่าแอปและภาษา =================
 UI_LANG_MAP = {
-    'search_ticker_title': "US Stock Scanner PRO (Enterprise Edition)",
-    'search_ticker_subtitle': "ระบบสแกนทางเทคนิค พร้อมคำนวณ AI Pattern Match จริง, 3 แนวรับ, 4 แนวต้าน, และกลุ่มธุรกิจ",
+    'search_ticker_title': "US Stock Scanner PRO",
+    'search_ticker_subtitle': "ระบบสแกนเทคนิคอล • คำนวณ % ขาขึ้น • AI Pattern • 3 แนวรับ 4 แนวต้าน",
     'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB):",
     'btn_analyze_single': "🔎 วิเคราะห์ทันที",
     'btn_scan_market': "🚀 เริ่มสแกนทั้ง 3 ตลาด (7,000+ หุ้น)",
     'status_preparing_tickers': "⏳ กำลังดึงรายชื่อหุ้นทั้งหมดจาก NASDAQ, NYSE, AMEX...",
     'status_scanning': "⏳ สแกนไปแล้ว {count}/{total} ตัว...",
     'status_analyzing_single': "⏳ กำลังดึงข้อมูลและวิเคราะห์ {ticker}...",
-    'success_stock_found_single': "🟢 หุ้น **{ticker}** ผ่านเงื่อนไขสแกนสัญญาณ BUY!",
-    'error_stock_not_found_single': "🔴 หุ้น **{ticker}** ไม่ติดเงื่อนไขสัญญาณซื้อในขณะนี้",
-    'expander_business_summary': "📖 สรุปธุรกิจ & โครงสร้างผู้ถือหุ้น (แปลไทยอัตโนมัติ)",
     'chart_title_single': "📈 กราฟเทคนิค 3 แนวรับ และ 4 ระดับแนวต้าน",
-    'analysis_title': "📊 ข้อมูลวิเคราะห์สำคัญ",
-    'metric_current_price': "ราคาปัจจุบัน",
+    'analysis_title': "📊 ข้อมูลแนวรับ - แนวต้าน & ตัวชี้วัดสำคัญ",
     'tab_search_ticker': "🔍 ค้นหา & วิเคราะห์รายตัว",
     'tab_scan_market': "🚀 สแกนคัดหุ้นทรงสวย",
     'tab_watchlist': "⭐ Watchlist ส่วนตัว",
@@ -39,13 +31,13 @@ SECTOR_MAP_TH = {
     'Technology': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์',
     'Healthcare': '🏥 สุขภาพ / การแพทย์ & ยา',
     'Financial Services': '🏦 การเงิน / ธนาคาร & ประกันภัย',
-    'Industrials': '🏭 อุตสาหกรรม / อวกาศ & การป้องกันประเทศ / ขนส่ง',
+    'Industrials': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง',
     'Consumer Cyclical': '🛍️ สินค้าฟุ่มเฟือย / ค้าปลีก & ยานยนต์',
     'Consumer Defensive': '🛒 สินค้าอุปโภคบริโภคจำเป็น',
-    'Energy': '⚡ พลังงาน / น้ำมัน, ก๊าซ & พลังงานสะอาด',
+    'Energy': '⚡ พลังงาน / น้ำมัน & ก๊าซ',
     'Real Estate': '🏢 อสังหาริมทรัพย์ / กองรีท (REITs)',
     'Basic Materials': '🧪 วัตถุดิบพื้นฐาน / เคมีภัณฑ์ & เหมืองแร่',
-    'Communication Services': '📡 สื่อสาร / โทรคมนาคม & บันเทิง/มีเดีย',
+    'Communication Services': '📡 สื่อสาร / โทรคมนาคม & บันเทิง',
     'Utilities': '💡 สาธารณูปโภค / ไฟฟ้า & ประปา'
 }
 
@@ -72,7 +64,7 @@ def get_yfinance_session():
     session.mount('http://', HTTPAdapter(max_retries=retries))
     return session
 
-# Server State ส่วนกลาง พร้อมเก็บ Timestamp ของเวลาที่สแกน
+# Server State ส่วนกลาง
 @st.cache_resource
 def get_global_server_state():
     return {
@@ -88,119 +80,265 @@ server_state = get_global_server_state()
 if 'watchlist' not in st.session_state:
     st.session_state.watchlist = []
 
-# Custom CSS
+# ================= Custom CSS สไตล์ Modern FinTech (Responsive) =================
 st.markdown(
     """
     <style>
     .block-container {
-        padding-top: 0.8rem !important;
+        padding-top: 0.6rem !important;
         padding-bottom: 2rem !important;
         padding-left: 0.8rem !important;
         padding-right: 0.8rem !important;
         max-width: 1200px;
     }
+    
     .main-title {
-        font-size: 1.7rem !important;
-        font-weight: 800 !important;
-        background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%);
+        font-size: 1.55rem !important;
+        font-weight: 900 !important;
+        background: linear-gradient(135deg, #60A5FA 0%, #2563EB 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         text-align: center;
         margin-bottom: 0.1rem;
+        letter-spacing: -0.5px;
     }
     .sub-title {
-        font-size: 0.8rem !important;
+        font-size: 0.78rem !important;
         color: #94A3B8;
         text-align: center;
-        margin-bottom: 1rem;
+        margin-bottom: 0.6rem;
     }
+    
     .stButton > button {
         width: 100% !important;
         background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
         color: #FFFFFF !important;
-        font-size: 0.95rem !important;
+        font-size: 0.9rem !important;
         font-weight: 700 !important;
-        padding: 0.5rem 1rem !important;
-        border-radius: 10px !important;
+        padding: 0.45rem 0.8rem !important;
+        border-radius: 8px !important;
         border: none !important;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25) !important;
+        box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3) !important;
+        transition: all 0.2s ease-in-out;
     }
-    .fin-card {
-        background: #0F172A !important;
-        border: 1px solid #334155 !important;
+    .stButton > button:hover {
+        opacity: 0.92;
+        transform: translateY(-1px);
+    }
+    
+    /* กล่อง Compact Board */
+    .compact-board {
+        background: #0B132B;
+        border: 1px solid #1E293B;
         border-radius: 10px;
-        padding: 12px 16px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        padding: 10px 12px;
         margin-bottom: 0.5rem;
-        color: #F8FAFC !important;
     }
-    .fin-card-label {
-        font-size: 0.75rem;
-        color: #94A3B8 !important;
+    .price-banner {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #1E293B;
+        margin-bottom: 8px;
+    }
+    .price-val-box {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+    }
+    .price-main {
+        font-size: 1.45rem;
+        font-weight: 900;
+        color: #F8FAFC;
+    }
+    .price-badge-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+    }
+    .price-badge {
+        font-size: 0.72rem;
+        padding: 2px 7px;
+        border-radius: 5px;
         font-weight: 600;
-        text-transform: uppercase;
+        white-space: nowrap;
     }
-    .fin-card-value {
-        font-size: 1.3rem;
-        font-weight: 800;
-        color: #FFFFFF !important;
-        margin-top: 2px;
+    .badge-rsi {
+        background: #1E293B;
+        color: #38BDF8;
+        border: 1px solid #334155;
     }
-    .fin-card-sub {
+    .badge-dist {
+        background: #064E3B;
+        color: #34D399;
+        border: 1px solid #059669;
+    }
+    .badge-trend-bull {
+        background: #064E3B;
+        color: #6EE7B7;
+        border: 1px solid #059669;
+    }
+    .badge-trend-bear {
+        background: #4C0519;
+        color: #FDA4AF;
+        border: 1px solid #9F1239;
+    }
+    .badge-trend-pull {
+        background: #451A03;
+        color: #FCD34D;
+        border: 1px solid #78350F;
+    }
+
+    /* Grid แนวรับ-แนวต้าน */
+    .snr-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+    .snr-card {
+        background: #0F172A;
+        border: 1px solid #1E293B;
+        border-radius: 6px;
+        padding: 6px 8px;
+    }
+    .snr-card-title {
         font-size: 0.7rem;
-        color: #34D399 !important;
-        margin-top: 2px;
+        font-weight: 700;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+        padding-bottom: 3px;
+        border-bottom: 1px dashed #334155;
     }
+    .snr-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.76rem;
+        padding: 2px 0;
+    }
+    .snr-lbl {
+        color: #94A3B8;
+        font-size: 0.72rem;
+    }
+    .snr-num {
+        font-weight: 700;
+        font-size: 0.82rem;
+    }
+    
+    .c-green { color: #22C55E !important; }
+    .c-lightgreen { color: #4ADE80 !important; }
+    .c-red { color: #EF4444 !important; }
+    .c-orange { color: #F97316 !important; }
+    .c-yellow { color: #FBBF24 !important; }
+    .c-darkred { color: #F43F5E !important; }
+
     .company-header {
-        font-size: 1.2rem;
+        font-size: 1.15rem;
         font-weight: 800;
         color: #38BDF8 !important;
         margin-bottom: 0rem;
     }
     .sector-badge {
-        font-size: 0.82rem;
+        font-size: 0.75rem;
         font-weight: 600;
         color: #FCD34D;
         background: #451A03;
         border: 1px solid #78350F;
-        padding: 4px 8px;
-        border-radius: 6px;
+        padding: 3px 7px;
+        border-radius: 5px;
         display: inline-block;
-        margin-top: 4px;
-        margin-bottom: 6px;
+        margin-top: 3px;
+        margin-bottom: 4px;
     }
     .chart-header-badge {
-        font-size: 0.95rem;
+        font-size: 0.82rem;
         font-weight: 700;
         color: #F8FAFC;
         background-color: #1E293B;
-        padding: 6px 10px;
-        border-radius: 6px;
-        margin-bottom: 6px;
+        padding: 4px 7px;
+        border-radius: 5px;
+        margin-bottom: 3px;
         display: inline-block;
     }
+    .fin-card {
+        background: #0F172A !important;
+        border: 1px solid #334155 !important;
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin-bottom: 0.4rem;
+        color: #F8FAFC !important;
+    }
     .biz-summary {
-        font-size: 0.85rem !important;
+        font-size: 0.82rem !important;
         color: #F1F5F9 !important;
         background-color: #0B132B !important;
-        padding: 12px !important;
-        border-radius: 8px;
-        border-left: 4px solid #3B82F6 !important;
+        padding: 10px !important;
+        border-radius: 6px;
+        border-left: 3px solid #3B82F6 !important;
         border: 1px solid #334155 !important;
-        margin-bottom: 0.4rem;
-        line-height: 1.6;
+        margin-bottom: 0.3rem;
+        line-height: 1.5;
     }
     .pattern-box {
         background-color: #172554 !important;
         color: #93C5FD !important;
-        padding: 8px 12px;
-        border-radius: 8px;
-        font-size: 0.82rem;
+        padding: 5px 8px;
+        border-radius: 6px;
+        font-size: 0.74rem;
         font-weight: 600;
         border: 1px solid #1E40AF !important;
-        margin-top: 6px;
-        margin-bottom: 6px;
+        margin-top: 3px;
+        margin-bottom: 4px;
     }
+    .news-card {
+        background: #0F172A;
+        border: 1px solid #1E293B;
+        border-radius: 6px;
+        padding: 6px 10px;
+        margin-bottom: 4px;
+    }
+    .news-title {
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #E2E8F0;
+        text-decoration: none;
+    }
+    .news-meta {
+        font-size: 0.68rem;
+        color: #64748B;
+        margin-top: 2px;
+    }
+    
+    /* แก้ปัญหาช่องว่างซ้อนทับบนมือถือ */
+    .desktop-only-space {
+        height: 28px;
+        display: block;
+    }
+    @media (max-width: 640px) {
+        .desktop-only-space {
+            display: none !important;
+        }
+        .main-title {
+            font-size: 1.3rem !important;
+        }
+        .price-main {
+            font-size: 1.3rem;
+        }
+        .snr-row {
+            font-size: 0.72rem;
+        }
+        .snr-num {
+            font-size: 0.78rem;
+        }
+        .block-container {
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+        }
+    }
+    
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
@@ -214,19 +352,16 @@ st.markdown(f'<div class="sub-title">{UI_LANG_MAP["search_ticker_subtitle"]}</di
 
 
 def calculate_ai_pattern_match(df):
-    """ฟังก์ชัน AI คำนวณ Pattern Match และความแม่นยำจริงตามรูปทรงแท่งเทียนของหุ้นแต่ละตัว"""
     try:
         if df is None or len(df) < 30:
             return "สร้างฐาน.png", 72.5
 
-        # ดึงราคาปิด 30 วันล่าสุดมาทำการ Normalization (0 ถึง 1)
         closes = df['close'].tail(30).values
         c_min, c_max = np.min(closes), np.max(closes)
         if c_max == c_min:
             return "สร้างฐานกรอบแคบ.png", 88.0
         norm_closes = (closes - c_min) / (c_max - c_min)
         
-        # กำหนดแม่แบบ (Templates) รูปทรงกราฟมาตรฐาน 30 จุด
         x = np.linspace(0, 1, 30)
         templates = {
             "สร้างฐานสะสมกำลัง.png": np.full(30, 0.45) + np.sin(x * 6 * np.pi) * 0.08,
@@ -240,19 +375,16 @@ def calculate_ai_pattern_match(df):
 
         for pat_name, pat_curve in templates.items():
             norm_pat = (pat_curve - np.min(pat_curve)) / (np.max(pat_curve) - np.min(pat_curve) + 1e-6)
-            # คำนวณความสอดคล้องเชิงโครงสร้าง (Mean Absolute Error & Correlation)
             mae = np.mean(np.abs(norm_closes - norm_pat))
             corr = np.corrcoef(norm_closes, norm_pat)[0, 1]
             if np.isnan(corr):
                 corr = 0.5
             
-            # รวมคะแนนเป็นเปอร์เซ็นต์ความแม่นยำเฉพาะของหุ้นตัวนั้น
             sim_score = (max(0.0, 1.0 - mae) * 0.6 + max(0.0, (corr + 1.0) / 2.0) * 0.4) * 100.0
             if sim_score > best_score:
                 best_score = sim_score
                 best_pattern = pat_name
 
-        # ปรับค่าให้อยู่ในช่วงที่สมจริง 68.5% - 94.8%
         final_score = round(max(68.5, min(94.8, best_score)), 1)
         return best_pattern, final_score
     except Exception:
@@ -265,24 +397,14 @@ def get_time_elapsed_thai(last_dt):
     diff = datetime.now() - last_dt
     total_seconds = int(diff.total_seconds())
     if total_seconds < 60:
-        return f" (เพิ่งสแกนเมื่อ {total_seconds} วินาทีที่แล้ว)"
+        return f" (เพิ่งสแกนเมื่อ {total_seconds} วิที่แล้ว)"
     elif total_seconds < 3600:
         mins = total_seconds // 60
-        return f" (สแกนไปแล้วเมื่อ {mins} นาทีที่แล้ว)"
+        return f" (สแกนไปแล้ว {mins} นาทีที่แล้ว)"
     else:
         hours = total_seconds // 3600
         mins = (total_seconds % 3600) // 60
-        return f" (สแกนไปแล้วเมื่อ {hours} ชั่วโมง {mins} นาทีที่แล้ว)"
-
-
-def get_base_directory():
-    try:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        if os.path.exists(script_dir):
-            return script_dir
-    except NameError:
-        pass
-    return os.getcwd()
+        return f" (สแกนไปแล้ว {hours} ชม. {mins} นาทีที่แล้ว)"
 
 
 @st.cache_data(ttl=86400)
@@ -381,6 +503,33 @@ def get_company_info_and_holders(ticker):
         }
 
 
+@st.cache_data(ttl=3600)
+def get_stock_news(ticker):
+    try:
+        stock = yf.Ticker(ticker, session=get_yfinance_session())
+        news_items = stock.news
+        if not news_items:
+            return []
+        
+        results = []
+        for n in news_items[:3]:
+            title_en = n.get('title', '')
+            title_th = translate_text_to_thai(title_en)
+            publisher = n.get('publisher', 'Financial News')
+            link = n.get('link', '#')
+            pub_ts = n.get('providerPublishTime', 0)
+            pub_date_str = datetime.fromtimestamp(pub_ts).strftime('%d/%m/%Y %H:%M') if pub_ts else ''
+            results.append({
+                'title': title_th,
+                'publisher': publisher,
+                'link': link,
+                'time': pub_date_str
+            })
+        return results
+    except Exception:
+        return []
+
+
 @st.cache_data(ttl=14400)
 def get_financials(ticker):
     try:
@@ -422,36 +571,52 @@ def create_ta_chart(df, ticker, res_data):
     latest_date = df.index[-1]
     earliest_date = df.index[0]
     
-    # 3 แนวรับ
+    # วางป้ายข้อความแบบเว้นระยะห่าง ป้องกันการเกยทับกัน 100%
     supports = [
-        ('Support 1 ($)', '#22C55E', -15),
-        ('Support 2 ($)', '#16A34A', -15),
-        ('Support 3 ($)', '#15803D', 15)
+        ('Support 1 ($)', '#22C55E', -12),
+        ('Support 2 ($)', '#16A34A', 12),
+        ('Support 3 ($)', '#15803D', -12)
     ]
     for key, color, ay_pos in supports:
         if key in res_data:
             val = res_data[key]
-            fig.add_shape(type="line", x0=earliest_date, y0=val, x1=latest_date, y1=val, line=dict(color=color, width=2, dash='dash'))
-            fig.add_annotation(x=latest_date, y=val, text=f"{key.replace(' ($)', '')}: ${val}", bgcolor=color, font=dict(color="white"), ax=0, ay=ay_pos)
+            fig.add_shape(type="line", x0=earliest_date, y0=val, x1=latest_date, y1=val, line=dict(color=color, width=1.6, dash='dash'))
+            fig.add_annotation(
+                x=latest_date, y=val, 
+                text=f"{key.replace(' ($)', '')}: ${val}", 
+                bgcolor=color, 
+                font=dict(color="white", size=9), 
+                xanchor="left",
+                ax=8, ay=ay_pos
+            )
 
-    # 4 แนวต้าน
     resistances = [
-        ('Resist 1 ($)', '#EF4444', -15),
-        ('Resist 2 ($)', '#F97316', -15),
-        ('Resist 3 ($)', '#EAB308', -15),
-        ('Resist 4 ($)', '#991B1B', 15)
+        ('Resist 1 ($)', '#EF4444', -12),
+        ('Resist 2 ($)', '#F97316', 12),
+        ('Resist 3 ($)', '#EAB308', -12),
+        ('Resist 4 ($)', '#991B1B', 12)
     ]
     for key, color, ay_pos in resistances:
         if key in res_data:
             val = res_data[key]
-            fig.add_shape(type="line", x0=earliest_date, y0=val, x1=latest_date, y1=val, line=dict(color=color, width=2, dash='dash'))
-            fig.add_annotation(x=latest_date, y=val, text=f"{key.replace(' ($)', '')}: ${val}", bgcolor=color, font=dict(color="white"), ax=0, ay=ay_pos)
+            fig.add_shape(type="line", x0=earliest_date, y0=val, x1=latest_date, y1=val, line=dict(color=color, width=1.6, dash='dash'))
+            fig.add_annotation(
+                x=latest_date, y=val, 
+                text=f"{key.replace(' ($)', '')}: ${val}", 
+                bgcolor=color, 
+                font=dict(color="white", size=9), 
+                xanchor="left",
+                ax=8, ay=ay_pos
+            )
 
+    fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
+
+    # ปรับ margin-right ให้มีพื้นที่สำหรับข้อความป้ายราคา
     fig.update_layout(
         xaxis_rangeslider_visible=False,
         template='plotly_dark',
-        margin=dict(l=10, r=10, t=15, b=10),
-        height=380,
+        margin=dict(l=6, r=65, t=10, b=6),
+        height=340,
         dragmode='pan',
         yaxis_title="ราคา ($)",
         showlegend=False
@@ -472,11 +637,15 @@ def check_ma_snr_combo(ticker, info_mode=False):
         delta = df['close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / loss
+        
+        loss_safe = loss.replace(0, np.nan)
+        rs = gain / loss_safe
         df['rsi'] = 100 - (100 / (1 + rs))
+        df['rsi'] = df['rsi'].fillna(100.0)
         latest_rsi = round(df['rsi'].iloc[-1], 2)
 
         latest_close = df['close'].iloc[-1]
+        fast_ma = df['close'].rolling(window=20).mean()
         slow_ma = df['close'].rolling(window=50).mean()
 
         lows = df['low'].values
@@ -512,37 +681,71 @@ def check_ma_snr_combo(ticker, info_mode=False):
         recent_3d_low = df['low'].tail(3).min()
         near_support = recent_3d_low <= (s1 * 1.05)
         near_ma50 = recent_3d_low <= (slow_ma.iloc[-1] * 1.02)
+        is_green_candle = latest_close > df['open'].iloc[-1]
+        has_volume = df['volume'].iloc[-1] >= 200_000
 
-        if not (near_support or near_ma50):
-            return None, df
+        # คำนวณคะแนนภาพรวมขาขึ้น (Bullish Strength Score 0-100%)
+        bull_score = 0
+        if latest_close >= fast_ma.iloc[-1]: bull_score += 20
+        if latest_close >= slow_ma.iloc[-1]: bull_score += 20
+        if fast_ma.iloc[-1] >= slow_ma.iloc[-1]: bull_score += 20
+        if 45 <= latest_rsi <= 70: bull_score += 15
+        if latest_close > s1: bull_score += 15
+        if df['volume'].iloc[-1] > df['volume'].rolling(20).mean().iloc[-1]: bull_score += 10
+        bullish_pct = min(96.5, max(8.5, round(bull_score * 0.9 + 5.0, 1)))
 
-        if latest_close > df['open'].iloc[-1] and df['volume'].iloc[-1] >= 200_000:
-            dist_from_sup = ((latest_close - s1) / s1) * 100
-            
-            # คำนวณ Pattern Match และ Score เฉพาะของหุ้นตัวนี้
-            pat_name, pat_score = calculate_ai_pattern_match(df)
-            
-            res_data = {
-                'Ticker': ticker,
-                'Price ($)': round(latest_close, 2),
-                'Support 1 ($)': round(s1, 2),
-                'Support 2 ($)': round(s2, 2),
-                'Support 3 ($)': round(s3, 2),
-                'Resist 1 ($)': round(r1, 2),
-                'Resist 2 ($)': round(r2, 2),
-                'Resist 3 ($)': round(r3, 2),
-                'Resist 4 ($)': round(r4, 2),
-                'Dist_Sup (%)': f'+{dist_from_sup:.2f}%',
-                'RSI': latest_rsi,
-                'Volume': f"{df['volume'].iloc[-1]:,.0f}",
-                'Date': df.index[-1].strftime('%Y-%m-%d'),
-                'pattern_name': pat_name,
-                'pattern_score': pat_score
-            }
-            if info_mode:
-                co_info = get_company_info_and_holders(ticker)
-                res_data.update(co_info)
-            return res_data, df
+        # ประเมินสถานะแนวโน้ม
+        if near_support and is_green_candle and has_volume and bullish_pct >= 60:
+            trend_status = "BUY_SIGNAL"
+            status_desc = "🟢 ผ่านเงื่อนไขสัญญาณ BUY (จุดเข้าซื้อต้นรอบ)"
+        elif bullish_pct >= 50:
+            trend_status = "PULLBACK"
+            status_desc = "🟡 กำลังย่อตัว/พักฐานในแนวโน้มขาขึ้น (Buy on Dip)"
+        elif latest_rsi < 35:
+            trend_status = "OVERSOLD"
+            status_desc = "🟣 ขายมากเกินไป (Oversold) ลุ้นเด้งกลับตัวที่แนวรับ"
+        else:
+            trend_status = "DOWNTREND"
+            status_desc = "🔴 โครงสร้างชะลอตัว/แนวโน้มขาลง (รอสร้างฐานที่แนวรับ)"
+
+        recent_high_60d = df['high'].tail(60).max()
+        drawdown_pct = ((latest_close - recent_high_60d) / recent_high_60d) * 100
+
+        dist_from_sup = ((latest_close - s1) / s1) * 100
+        pat_name, pat_score = calculate_ai_pattern_match(df)
+
+        res_data = {
+            'Ticker': ticker,
+            'Price ($)': round(latest_close, 2),
+            'Support 1 ($)': round(s1, 2),
+            'Support 2 ($)': round(s2, 2),
+            'Support 3 ($)': round(s3, 2),
+            'Resist 1 ($)': round(r1, 2),
+            'Resist 2 ($)': round(r2, 2),
+            'Resist 3 ($)': round(r3, 2),
+            'Resist 4 ($)': round(r4, 2),
+            'Dist_Sup (%)': f'{dist_from_sup:+.2f}%',
+            'RSI': latest_rsi,
+            'Volume': f"{df['volume'].iloc[-1]:,.0f}",
+            'Date': df.index[-1].strftime('%Y-%m-%d'),
+            'pattern_name': pat_name,
+            'pattern_score': pat_score,
+            'bullish_pct': bullish_pct,
+            'bearish_pct': round(100.0 - bullish_pct, 1),
+            'trend_status': trend_status,
+            'status_desc': status_desc,
+            'drawdown_pct': f'{drawdown_pct:.2f}%'
+        }
+
+        if info_mode:
+            co_info = get_company_info_and_holders(ticker)
+            res_data.update(co_info)
+
+        if not info_mode:
+            if not (trend_status == "BUY_SIGNAL"):
+                return None, df
+
+        return res_data, df
     except Exception:
         pass
     return None, None
@@ -559,146 +762,167 @@ tab1, tab2, tab3 = st.tabs([UI_LANG_MAP['tab_search_ticker'], UI_LANG_MAP['tab_s
 
 # --- TAB 1: ค้นหาหุ้นรายตัว ---
 with tab1:
-    st.markdown("### 🔍 ตรวจสอบสัญญาณเทคนิคและพื้นฐานรายตัว")
-    
     col_in1, col_in2 = st.columns([3, 1])
     with col_in1:
         single_ticker = st.text_input(UI_LANG_MAP['search_ticker_label'], value='').strip().upper()
     with col_in2:
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<div class='desktop-only-space'></div>", unsafe_allow_html=True)
         search_btn = st.button(UI_LANG_MAP['btn_analyze_single'])
 
     if search_btn and single_ticker:
         with st.spinner(UI_LANG_MAP['status_analyzing_single'].format(ticker=single_ticker)):
             res, raw_df = check_ma_snr_combo(single_ticker, info_mode=True)
             df_profit = get_financials(single_ticker)
+            news_items = get_stock_news(single_ticker)
 
             if res:
                 company_full_name = res.get("longNameEn", single_ticker)
                 sector_desc = res.get("sectorTh", "N/A")
                 industry_desc = res.get("industryTh", "N/A")
+                t_status = res.get("trend_status", "BUY_SIGNAL")
+                bull_pct = res.get("bullish_pct", 50.0)
+                bear_pct = res.get("bearish_pct", 50.0)
 
                 st.markdown(f'<p class="company-header">{single_ticker} : {company_full_name}</p>', unsafe_allow_html=True)
                 st.markdown(f'<div class="sector-badge">🏷️ กลุ่มธุรกิจ: {sector_desc} | ย่อย: {industry_desc}</div>', unsafe_allow_html=True)
-                st.success(UI_LANG_MAP['success_stock_found_single'].format(ticker=single_ticker) + f' | ข้อมูล ณ วันที่: {res["Date"]}')
                 
+                if t_status == "BUY_SIGNAL":
+                    st.success(f"{res['status_desc']} | ข้อมูล ณ วันที่: {res['Date']}")
+                elif t_status == "PULLBACK":
+                    st.warning(f"{res['status_desc']} (ย่อตัวจากยอด {res['drawdown_pct']}) | ข้อมูล ณ วันที่: {res['Date']}")
+                elif t_status == "OVERSOLD":
+                    st.info(f"{res['status_desc']} (RSI: {res['RSI']}) | ข้อมูล ณ วันที่: {res['Date']}")
+                else:
+                    st.error(f"{res['status_desc']} (ย่อตัวจากยอด {res['drawdown_pct']}) | ข้อมูล ณ วันที่: {res['Date']}")
+
+                # ปุ่ม Watchlist
                 if single_ticker not in st.session_state.watchlist:
-                    if st.button(f"⭐ เพิ่ม {single_ticker} เข้า Watchlist"):
+                    if st.button(f"⭐ เพิ่ม {single_ticker} เข้า Watchlist", key=f"btn_add_wl_{single_ticker}"):
                         st.session_state.watchlist.append(single_ticker)
                         st.success(f"เพิ่ม {single_ticker} สำเร็จ!")
                         st.rerun()
                 else:
-                    if st.button(f"🗑️ ลบ {single_ticker} ออกจาก Watchlist"):
+                    if st.button(f"🗑️ ลบ {single_ticker} ออกจาก Watchlist", key=f"btn_del_wl_{single_ticker}"):
                         st.session_state.watchlist.remove(single_ticker)
                         st.rerun()
-                    st.info(f"📌 หุ้น {single_ticker} อยู่ใน Watchlist ของคุณแล้ว")
+                    st.info(f"📌 หุ้น {single_ticker} อยู่ใน Watchlist แล้ว")
 
+                # กราฟแท่งเทียน
                 if raw_df is not None:
                     st.markdown(f"#### {UI_LANG_MAP['chart_title_single']}")
-                    st.markdown(f'<div class="chart-header-badge">{single_ticker} | ราคาปัจจุบัน: ${res["Price ($)"]} (RSI: {res.get("RSI", 0)})</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="chart-header-badge">{single_ticker} | ล่าสุด: ${res["Price ($)"]} (RSI: {res.get("RSI", 0)})</div>', unsafe_allow_html=True)
                     fig = create_ta_chart(raw_df, single_ticker, res)
                     if fig:
-                        st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
+                        st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG, key=f"chart_single_{single_ticker}")
                     
-                    # แสดงผล Pattern และ Score ที่คำนวณจริงเฉพาะหุ้นตัวนี้
                     pat_name = res.get('pattern_name', 'สร้างฐาน.png')
                     pat_score = res.get('pattern_score', 75.0)
                     st.markdown(f'<div class="pattern-box">😊 🤖 AI Pattern Match: {pat_name} (ความแม่นยำ: {pat_score}%)</div>', unsafe_allow_html=True)
 
                 st.markdown("---")
-                st.markdown(f"#### {UI_LANG_MAP['analysis_title']}")
                 
-                col_m1, col_m2 = st.columns(2)
-                with col_m1:
-                    st.markdown(f"""
-                    <div class="fin-card">
-                        <div class="fin-card-label">💰 {UI_LANG_MAP['metric_current_price']}</div>
-                        <div class="fin-card-value">${res['Price ($)']}</div>
-                        <div class="fin-card-sub">RSI (14): {res['RSI']}</div>
+                # กล่อง Compact Board
+                st.markdown(f"#### {UI_LANG_MAP['analysis_title']}")
+                trend_badge_class = "badge-trend-bull" if bull_pct >= 60 else ("badge-trend-pull" if bull_pct >= 45 else "badge-trend-bear")
+                
+                st.markdown(f"""
+                <div class="compact-board">
+                    <div class="price-banner">
+                        <div class="price-val-box">
+                            <span style="font-size:0.8rem; color:#94A3B8; font-weight:600;">💰 ราคา:</span>
+                            <span class="price-main">${res['Price ($)']}</span>
+                        </div>
+                        <div class="price-badge-group">
+                            <span class="price-badge {trend_badge_class}">📈 ขาขึ้น: {bull_pct}%</span>
+                            <span class="price-badge badge-rsi">RSI: {res['RSI']}</span>
+                            <span class="price-badge badge-dist">ห่างรับ 1: {res['Dist_Sup (%)']}</span>
+                        </div>
                     </div>
-                    """, unsafe_allow_html=True)
-                with col_m2:
-                    st.markdown(f"""
-                    <div class="fin-card">
-                        <div class="fin-card-label">🛡️ แนวรับ 1 (ใกล้สุด)</div>
-                        <div class="fin-card-value">${res['Support 1 ($)']}</div>
-                        <div class="fin-card-sub">{res['Dist_Sup (%)']} จากราคาปัจจุบัน</div>
+                    <div class="snr-grid">
+                        <div class="snr-card" style="border-left: 3px solid #22C55E;">
+                            <div class="snr-card-title c-green">🛡️ แนวรับ (Support)</div>
+                            <div class="snr-row"><span class="snr-lbl">รับ 1 (ใกล้สุด)</span><span class="snr-num c-green">${res['Support 1 ($)']}</span></div>
+                            <div class="snr-row"><span class="snr-lbl">รับ 2 (โซนหลัก)</span><span class="snr-num c-lightgreen">${res['Support 2 ($)']}</span></div>
+                            <div class="snr-row"><span class="snr-lbl">รับ 3 (ลึกสุด)</span><span class="snr-num c-lightgreen">${res['Support 3 ($)']}</span></div>
+                        </div>
+                        <div class="snr-card" style="border-left: 3px solid #EF4444;">
+                            <div class="snr-card-title c-red">⚡ แนวต้าน (Resistance)</div>
+                            <div class="snr-row"><span class="snr-lbl">ต้าน 1</span><span class="snr-num c-red">${res['Resist 1 ($)']}</span></div>
+                            <div class="snr-row"><span class="snr-lbl">ต้าน 2</span><span class="snr-num c-orange">${res['Resist 2 ($)']}</span></div>
+                            <div class="snr-row"><span class="snr-lbl">ต้าน 3</span><span class="snr-num c-yellow">${res['Resist 3 ($)']}</span></div>
+                            <div class="snr-row"><span class="snr-lbl">ต้าน 4 (สูงสุด)</span><span class="snr-num c-darkred">${res['Resist 4 ($)']}</span></div>
+                        </div>
                     </div>
-                    """, unsafe_allow_html=True)
+                </div>
+                """, unsafe_allow_html=True)
 
-                col_m3, col_m4 = st.columns(2)
-                with col_m3:
-                    st.markdown(f"""
-                    <div class="fin-card">
-                        <div class="fin-card-label">🛡️ แนวรับ 2</div>
-                        <div class="fin-card-value">${res['Support 2 ($)']}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with col_m4:
-                    st.markdown(f"""
-                    <div class="fin-card">
-                        <div class="fin-card-label">🛡️ แนวรับ 3 (ลึกสุด)</div>
-                        <div class="fin-card-value">${res['Support 3 ($)']}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                # ตารางกลยุทธ์แบ่งไม้เข้าซื้อ
+                st.markdown("#### 🎯 กลยุทธ์แบ่งไม้เข้าซื้อ & ประเมินความแข็งแรงของแนวรับ")
+                df_strategy = pd.DataFrame([
+                    {
+                        "ระดับแนวรับ": "🛡️ แนวรับ 1 (สวิงโลว์ใกล้สุด)",
+                        "ราคา ($)": f"${res['Support 1 ($)']}",
+                        "ระยะห่าง": f"{((res['Support 1 ($)'] - res['Price ($)'])/res['Price ($)'])*100:+.2f}%",
+                        "ความแข็งแรง": "⭐️⭐️ ปานกลาง",
+                        "กลยุทธ์แบ่งไม้": "25% (ไม้หยั่งเชิง)"
+                    },
+                    {
+                        "ระดับแนวรับ": "🛡️ แนวรับ 2 (ฐานสะสมหลัก)",
+                        "ราคา ($)": f"${res['Support 2 ($)']}",
+                        "ระยะห่าง": f"{((res['Support 2 ($)'] - res['Price ($)'])/res['Price ($)'])*100:+.2f}%",
+                        "ความแข็งแรง": "⭐️⭐️⭐️⭐️ แข็งแกร่ง",
+                        "กลยุทธ์แบ่งไม้": "35% (ไม้หลักสะสม)"
+                    },
+                    {
+                        "ระดับแนวรับ": "🛡️ แนวรับ 3 (แนวรับจิตวิทยาใหญ่)",
+                        "ราคา ($)": f"${res['Support 3 ($)']}",
+                        "ระยะห่าง": f"{((res['Support 3 ($)'] - res['Price ($)'])/res['Price ($)'])*100:+.2f}%",
+                        "ความแข็งแรง": "⭐️⭐️⭐️⭐️⭐️ แข็งแกร่งมาก",
+                        "กลยุทธ์แบ่งไม้": "40% (ไม้สะสมใหญ่)"
+                    }
+                ])
+                st.dataframe(df_strategy, use_container_width=True, hide_index=True)
 
-                col_r1, col_r2 = st.columns(2)
-                with col_r1:
-                    st.markdown(f"""
-                    <div class="fin-card">
-                        <div class="fin-card-label">⚡ แนวต้าน 1</div>
-                        <div class="fin-card-value">${res['Resist 1 ($)']}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with col_r2:
-                    st.markdown(f"""
-                    <div class="fin-card">
-                        <div class="fin-card-label">⚡ แนวต้าน 2</div>
-                        <div class="fin-card-value">${res['Resist 2 ($)']}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                # ข่าวสารล่าสุด
+                st.markdown("#### 📰 ข่าวสารล่าสุด & ปัจจัยกระทบ (แปลไทยอัตโนมัติ)")
+                if news_items:
+                    for news in news_items:
+                        st.markdown(f"""
+                        <div class="news-card">
+                            <a class="news-title" href="{news['link']}" target="_blank">📌 {news['title']}</a>
+                            <div class="news-meta">แหล่งข่าว: {news['publisher']} | เวลา: {news['time']}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.info("ℹ️ ไม่พบหัวข้อข่าวสำคัญในรอบสัปดาห์สำหรับหุ้นตัวนี้")
 
-                col_r3, col_r4 = st.columns(2)
-                with col_r3:
-                    st.markdown(f"""
-                    <div class="fin-card">
-                        <div class="fin-card-label">⚡ แนวต้าน 3</div>
-                        <div class="fin-card-value">${res['Resist 3 ($)']}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with col_r4:
-                    st.markdown(f"""
-                    <div class="fin-card">
-                        <div class="fin-card-label">🚀 แนวต้าน 4</div>
-                        <div class="fin-card-value">${res['Resist 4 ($)']}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                st.markdown("<br>", unsafe_allow_html=True)
+                # งบการเงินย้อนหลัง
                 st.markdown("#### 💰 กำไรสุทธิ 3 ไตรมาสล่าสุด")
                 if df_profit is not None:
                     c_table, c_chart = st.columns(2)
                     with c_table:
                         st.dataframe(df_profit, use_container_width=True, hide_index=True, height=125)
                     with c_chart:
+                        bar_colors = ['#22C55E' if v >= 0 else '#EF4444' for v in df_profit['Net Income (M$)']]
                         fig_profit = go.Figure(data=[go.Bar(
                             x=df_profit['Quarter End'],
                             y=df_profit['Net Income (M$)'],
-                            marker_color='#3B82F6'
+                            marker_color=bar_colors
                         )])
                         fig_profit.update_layout(
-                            margin=dict(l=10, r=10, t=10, b=10),
+                            margin=dict(l=8, r=8, t=8, b=8),
                             height=125,
                             template='plotly_dark',
                             xaxis_title="",
                             yaxis_title="M$"
                         )
-                        st.plotly_chart(fig_profit, use_container_width=True, config={'displayModeBar': False})
+                        st.plotly_chart(fig_profit, use_container_width=True, config={'displayModeBar': False}, key=f"chart_profit_{single_ticker}")
                 else:
                     st.warning("ไม่พบข้อมูลกำไรสุทธิย้อนหลัง")
 
                 st.markdown("---")
                 
+                # โครงสร้างผู้ถือหุ้น
                 summary_text = res.get('summaryTh', 'N/A')
                 shares_tot = res.get('sharesOutstanding', 'N/A')
                 inst_pct = res.get('institutionalHeld', 'N/A')
@@ -707,13 +931,13 @@ with tab1:
 
                 with st.expander(UI_LANG_MAP['expander_business_summary'], expanded=True):
                     st.markdown(f"""
-                    <div class="fin-card" style="margin-bottom: 12px; background: #0F172A; border: 1px solid #334155; padding: 14px; border-radius: 8px;">
-                        <b style="color: #60A5FA; font-size: 0.95rem;">📊 โครงสร้างผู้ถือหุ้น & ข้อมูลบริษัท:</b>
-                        <div style="color: #F8FAFC; line-height: 1.8; margin-top: 6px; font-size: 0.88rem;">
-                        • กลุ่มธุรกิจหลัก: <b style="color: #FCD34D;">{sector_desc}</b><br>
+                    <div class="fin-card">
+                        <b style="color: #60A5FA; font-size: 0.88rem;">📊 โครงสร้างผู้ถือหุ้น & ข้อมูลบริษัท:</b>
+                        <div style="color: #F8FAFC; line-height: 1.7; margin-top: 4px; font-size: 0.82rem;">
+                        • กลุ่มธุรกิจ: <b style="color: #FCD34D;">{sector_desc}</b><br>
                         • อุตสาหกรรมย่อย: <b style="color: #E2E8F0;">{industry_desc}</b><br>
-                        • จำนวนหุ้นที่มีทั้งหมด: <b style="color: #FFFFFF;">{shares_tot} หุ้น</b><br>
-                        • สถาบัน/บริษัทใหญ่ถือครอง: <b style="color: #38BDF8;">{inst_pct}</b><br>
+                        • จำนวนหุ้นทั้งหมด: <b style="color: #FFFFFF;">{shares_tot} หุ้น</b><br>
+                        • สถาบันถือครอง: <b style="color: #38BDF8;">{inst_pct}</b><br>
                         • ผู้บริหาร/Insider ถือครอง: <b style="color: #FBBF24;">{insider_pct}</b><br>
                         • รายย่อยและอื่นๆ ถือครอง: <b style="color: #34D399;">{retail_pct}</b>
                         </div>
@@ -725,10 +949,10 @@ with tab1:
                     else:
                          st.warning("⚠️ ไม่พบข้อมูลสรุปธุรกิจสำหรับหุ้นตัวนี้")
             else:
-                st.error(UI_LANG_MAP['error_stock_not_found_single'].format(ticker=single_ticker))
+                st.error(f"❌ ไม่พบข้อมูลสัญลักษณ์หุ้น **{single_ticker}** ในระบบ กรุณาตรวจสอบชื่อ Ticker อีกครั้ง")
 
 
-# --- TAB 2: สแกนคัดหุ้นทั้งตลาด ---
+# --- TAB 2: สแกนคัดหุ้นทั้งตลาด (จัดลูปแบบแถวต่อแถว ป้องกันสลับฝั่งบนมือถือ) ---
 with tab2:
     st.markdown("### 🚀 สแกนหาหุ้นทรงสวยประจำวัน (ทั้งตลาด NASDAQ, NYSE, AMEX)")
     
@@ -736,9 +960,9 @@ with tab2:
     
     col_btn1, col_btn2 = st.columns([3, 1])
     with col_btn1:
-        scan_btn = st.button(UI_LANG_MAP['btn_scan_market'], disabled=is_busy)
+        scan_btn = st.button(UI_LANG_MAP['btn_scan_market'], disabled=is_busy, key="btn_scan_all")
     with col_btn2:
-        reset_btn = st.button("🔄 รีเซ็ตข้อมูลสแกน", disabled=is_busy)
+        reset_btn = st.button("🔄 รีเซ็ตข้อมูลสแกน", disabled=is_busy, key="btn_reset_all")
 
     if is_busy:
         st.warning("⏳ **ขณะนี้มีผู้ใช้งานท่านอื่นกำลังสแกนทั้งตลาดอยู่** ระบบกำลังประมวลผลให้ส่วนกลาง กรุณารอประมาณ 1-2 นาที จากนั้นผลลัพธ์จะแสดงขึ้นมาโดยอัตโนมัติครับ")
@@ -764,7 +988,7 @@ with tab2:
 
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
-                futures = {executor.submit(check_ma_snr_combo, ticker, True): ticker for ticker in stock_list}
+                futures = {executor.submit(check_ma_snr_combo, ticker, False): ticker for ticker in stock_list}
                 for future in concurrent.futures.as_completed(futures):
                     count += 1
                     if count % 20 == 0 or count == total_stocks:
@@ -787,9 +1011,9 @@ with tab2:
         server_state["last_scanned_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         if results:
             df_result_display = pd.DataFrame([item['res_data'] for item in results])[[
-                'Ticker', 'longNameEn', 'sectorTh', 'Price ($)', 'Support 1 ($)', 'Support 2 ($)', 'Support 3 ($)', 'Dist_Sup (%)', 'RSI', 
+                'Ticker', 'Price ($)', 'bullish_pct', 'Support 1 ($)', 'Support 2 ($)', 'Support 3 ($)', 'Dist_Sup (%)', 'RSI', 
                 'Resist 1 ($)', 'Resist 2 ($)', 'Resist 3 ($)', 'Resist 4 ($)', 
-                'sharesOutstanding', 'institutionalHeld', 'retailHeld', 'Volume', 'Date'
+                'Volume', 'Date'
             ]]
             server_state["latest_df"] = df_result_display
         st.rerun()
@@ -813,46 +1037,50 @@ with tab2:
         end_idx = start_idx + items_per_page
         current_page_items = results[start_idx:end_idx]
 
-        cols = st.columns(2)
-        col_idx = 0
+        # สร้างคอลัมน์ทีละคู่ เพื่อให้เรียงลำดับถูกต้อง 100% ทั้งมือถือและคอม
+        for row_idx in range(0, len(current_page_items), 2):
+            cols = st.columns(2)
+            for c_offset in range(2):
+                item_idx = row_idx + c_offset
+                if item_idx < len(current_page_items):
+                    item = current_page_items[item_idx]
+                    res_data = item['res_data']
+                    ticker_found = res_data['Ticker']
+                    raw_df_found = item.get('raw_df')
+                    b_pct = res_data.get('bullish_pct', 70.0)
 
-        for item in current_page_items:
-            res_data = item['res_data']
-            ticker_found = res_data['Ticker']
-            co_name = res_data.get('longNameEn', ticker_found)
-            sec_name = res_data.get('sectorTh', 'N/A')
-            shares = res_data.get('sharesOutstanding', 'N/A')
-            inst = res_data.get('institutionalHeld', 'N/A')
-            raw_df_found = item.get('raw_df')
-
-            with cols[col_idx % 2]:
-                with st.container():
-                    st.markdown(f'<p style="font-size:0.95rem; font-weight:bold; color:#60A5FA; margin-bottom:0px;">🟢 {ticker_found} : {co_name}</p>', unsafe_allow_html=True)
-                    st.caption(f"🏷️ กลุ่มธุรกิจ: {sec_name} | Support 1: ${res_data['Support 1 ($)']} | ต้าน1: ${res_data['Resist 1 ($)']} | หุ้นทั้งหมด: {shares} | สถาบัน: {inst}")
-                    
-                    if raw_df_found is not None:
-                        st.markdown(f'<div class="chart-header-badge">{ticker_found} | ราคาปัจจุบัน: ${res_data["Price ($)"]} (RSI: {res_data.get("RSI", 0)})</div>', unsafe_allow_html=True)
-                        fig_gallery = create_ta_chart(raw_df_found, ticker_found, res_data)
-                        if fig_gallery:
-                            st.plotly_chart(fig_gallery, use_container_width=True, config=PLOTLY_CONFIG)
-                        
-                        # แสดงผล Pattern และ Score ที่คำนวณจริงเฉพาะหุ้นตัวนี้ในแกลเลอรี่
-                        pat_name = res_data.get('pattern_name', 'สร้างฐาน.png')
-                        pat_score = res_data.get('pattern_score', 75.0)
-                        st.markdown(f'<div class="pattern-box" style="font-size:0.75rem; padding:4px 8px;">😊 🤖 AI Pattern Match: {pat_name} (ความแม่นยำ: {pat_score}%)</div>', unsafe_allow_html=True)
-                    else:
-                        st.warning("ไม่พบข้อมูลกราฟ")
-                        
-                    st.markdown("<br>", unsafe_allow_html=True)
-                col_idx += 1
+                    with cols[c_offset]:
+                        with st.container():
+                            st.markdown(f'<p style="font-size:0.92rem; font-weight:bold; color:#60A5FA; margin-bottom:0px;">🟢 {ticker_found} (ขาขึ้น {b_pct}%)</p>', unsafe_allow_html=True)
+                            st.caption(f"Support 1: ${res_data['Support 1 ($)']} | ต้าน 1: ${res_data['Resist 1 ($)']} | RSI: {res_data['RSI']}")
+                            
+                            if ticker_found not in st.session_state.watchlist:
+                                if st.button(f"⭐ บันทึก {ticker_found} เข้า Watchlist", key=f"btn_gal_wl_{ticker_found}_{page_num}_{item_idx}"):
+                                    st.session_state.watchlist.append(ticker_found)
+                                    st.rerun()
+                            
+                            if raw_df_found is not None:
+                                st.markdown(f'<div class="chart-header-badge">{ticker_found} | ล่าสุด: ${res_data["Price ($)"]} (RSI: {res_data.get("RSI", 0)})</div>', unsafe_allow_html=True)
+                                fig_gallery = create_ta_chart(raw_df_found, ticker_found, res_data)
+                                if fig_gallery:
+                                    st.plotly_chart(fig_gallery, use_container_width=True, config=PLOTLY_CONFIG, key=f"gallery_chart_{ticker_found}_{page_num}_{item_idx}")
+                                
+                                pat_name = res_data.get('pattern_name', 'สร้างฐาน.png')
+                                pat_score = res_data.get('pattern_score', 75.0)
+                                st.markdown(f'<div class="pattern-box" style="font-size:0.72rem; padding:3px 6px;">😊 🤖 AI Pattern: {pat_name} ({pat_score}%)</div>', unsafe_allow_html=True)
+                            else:
+                                st.warning("ไม่พบข้อมูลกราฟ")
+                                
+                            st.markdown("<br>", unsafe_allow_html=True)
 
         st.markdown("---")
-        st.markdown("#### 📊 ตารางสรุปสัญญาณราคาและโครงสร้างผู้ถือหุ้น")
+        st.markdown("#### 📊 ตารางสรุปสัญญาณราคาหุ้นทรงสวยประจำวัน")
         st.dataframe(df_result_display, use_container_width=True, hide_index=True, height=200)
         st.download_button(
             label='📥 ดาวน์โหลด Watchlist วันนี้ (CSV)',
             data=df_result_display.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig'),
             file_name=f'us_watchlist_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv',
+            key="btn_download_csv"
         )
 
 
@@ -860,7 +1088,7 @@ with tab2:
 with tab3:
     st.markdown("### ⭐ รายชื่อหุ้นใน Watchlist ส่วนตัวของคุณ")
     if st.session_state.watchlist:
-        if st.button("🗑️ ล้างรายชื่อ Watchlist ทั้งหมด"):
+        if st.button("🗑️ ล้างรายชื่อ Watchlist ทั้งหมด", key="btn_clear_wl_all"):
             st.session_state.watchlist = []
             st.rerun()
         
@@ -878,7 +1106,7 @@ with tab3:
                     
                     st.markdown(f"""
                     <div class="fin-card">
-                        <b>📌 {w_ticker}</b> | ราคาปัจจุบัน: <b>${curr_price}</b> ({change:+.2f}%)
+                        <b>📌 {w_ticker}</b> | ราคาล่าสุด: <b>${curr_price}</b> ({change:+.2f}%)
                     </div>
                     """, unsafe_allow_html=True)
                 else:
