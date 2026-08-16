@@ -13,8 +13,8 @@ import plotly.graph_objects as go
 # ================= ส่วนตั้งค่าแอปและภาษา =================
 UI_LANG_MAP = {
     'search_ticker_title': "US Stock Scanner PRO",
-    'search_ticker_subtitle': "ระบบสแกนเทคนิคอล • คำนวณ % โครงสร้างราคา • AI Pattern • 3 แนวรับ 4 แนวต้าน",
-    'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB, AAOI, BZAI):",
+    'search_ticker_subtitle': "ระบบสแกนเทคนิคอล • คำนวณ % ขาขึ้น • AI Pattern • 3 แนวรับ 4 แนวต้าน",
+    'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB, AAOI, IREN):",
     'btn_analyze_single': "🔎 วิเคราะห์ทันที",
     'btn_scan_market': "🚀 เริ่มสแกนทั้ง 3 ตลาด (7,000+ หุ้น)",
     'status_preparing_tickers': "⏳ กำลังดึงรายชื่อหุ้นทั้งหมดจาก NASDAQ, NYSE, AMEX...",
@@ -191,11 +191,6 @@ st.markdown(
         color: #FCD34D;
         border: 1px solid #78350F;
     }
-    .badge-trend-side {
-        background: #1E293B;
-        color: #94A3B8;
-        border: 1px solid #475569;
-    }
 
     .snr-grid {
         display: grid;
@@ -239,7 +234,6 @@ st.markdown(
     .c-yellow { color: #FBBF24 !important; }
     .c-darkred { color: #F43F5E !important; }
 
-    /* การ์ดกลยุทธ์แนวรับแนวตั้ง */
     .strategy-card {
         background: #0F172A;
         border: 1px solid #1E293B;
@@ -399,9 +393,14 @@ st.markdown(f'<div class="sub-title">{UI_LANG_MAP["search_ticker_subtitle"]}</di
 
 def calculate_swing_snr(df, latest_close):
     """
-    สูตรคำนวณแนวรับ-แนวต้านตาม Active Wave (60-120 วัน)
+    สูตรคำนวณแนวรับ-แนวต้านตามมาตรฐานสากล (Fibonacci Retracement + Swing Points):
+    - วิเคราะห์กรอบรอบคลื่นหลัก (Active Wave 60-120 วัน)
+    - S1: ฐานสวิงโลว์ใกล้สุด 5-15 วัน (หรือ Fib 0.618)
+    - S2: ฐานพักตัวหลัก / ก้นหลุมก่อนหน้า (แถว 130-135)
+    - S3: ฐานรับใหญ่ของรอบคลื่นปัจจุบัน (แถว 76-80)
     """
     n = len(df)
+    # ดูย้อนหลังเฉพาะรอบคลื่นปัจจุบัน 120 วัน ไม่ย้อนไปดึงราคาปีก่อน
     window_n = min(n, 120)
     df_wave = df.iloc[-window_n:]
     
@@ -410,18 +409,21 @@ def calculate_swing_snr(df, latest_close):
     
     wave_high = float(np.max(highs))
     wave_low = float(np.min(lows))
-    wave_range = max(1e-4, wave_high - wave_low)
+    wave_range = wave_high - wave_low
 
+    # 1. คำนวณระดับ Fibonacci ของรอบคลื่นปัจจุบัน
     fib_236 = wave_high - 0.236 * wave_range
     fib_382 = wave_high - 0.382 * wave_range
     fib_500 = wave_high - 0.500 * wave_range
     fib_618 = wave_high - 0.618 * wave_range
     fib_786 = wave_high - 0.786 * wave_range
 
+    # 2. ค้นหาจุด Swing Lows ในรอบปัจจุบัน
     recent_15d_low = float(np.min(lows[-15:]))
     recent_45d_low = float(np.min(lows[-45:]))
 
     # --- กำหนดแนวรับ (Supports) ---
+    # S1: สวิงโลว์ 15 วัน หรือแนว Fib ที่อยู่ใกล้ใต้ราคาปัจจุบัน
     if recent_15d_low < latest_close * 0.995 and recent_15d_low > latest_close * 0.85:
         s1 = recent_15d_low
     elif fib_500 < latest_close * 0.995 and fib_500 > latest_close * 0.88:
@@ -431,6 +433,7 @@ def calculate_swing_snr(df, latest_close):
     else:
         s1 = latest_close * 0.95
 
+    # S2: ฐานพักตัวหลักรอบก่อนหน้า (ก้นหลุมรอบ 45 วัน หรือ Fib 61.8% / 78.6%)
     if recent_45d_low < s1 * 0.96 and recent_45d_low > wave_low * 1.15:
         s2 = recent_45d_low
     elif fib_618 < s1 * 0.96:
@@ -440,20 +443,27 @@ def calculate_swing_snr(df, latest_close):
     else:
         s2 = s1 * 0.89
 
+    # S3: ฐานรับใหญ่ของรอบคลื่นปัจจุบัน (Swing Low รอบคลื่น ~ $76-$80)
     s3 = wave_low if wave_low < s2 * 0.90 else s2 * 0.75
 
+    # ป้องกันระดับแนวรับซ้อนทับกัน
     if s2 >= s1: s2 = s1 * 0.90
     if s3 >= s2: s3 = s2 * 0.75
 
     # --- กำหนดแนวต้าน (Resistances) ---
-    r4 = wave_high
+    r4 = wave_high  # จุดสูงสุดของรอบคลื่นใหญ่ ($233.67)
+    
+    # คัดเลือกแนวต้านที่อยู่เหนือราคาปัจจุบัน
     cand_resists = [fib_500, fib_382, fib_236]
     valid_resists = sorted([r for r in cand_resists if r > latest_close * 1.015 and r < r4 * 0.985])
 
     if len(valid_resists) >= 3:
-        r1, r2, r3 = valid_resists[0], valid_resists[1], valid_resists[2]
+        r1 = valid_resists[0]
+        r2 = valid_resists[1]
+        r3 = valid_resists[2]
     elif len(valid_resists) == 2:
-        r1, r2 = valid_resists[0], valid_resists[1]
+        r1 = valid_resists[0]
+        r2 = valid_resists[1]
         r3 = r2 + (r4 - r2) * 0.50
     elif len(valid_resists) == 1:
         r1 = valid_resists[0]
@@ -743,18 +753,10 @@ def create_ta_chart(df, ticker, res_data):
 
 @st.cache_data(ttl=14400)
 def check_ma_snr_combo(ticker, info_mode=False):
-    """
-    ระบบคัดแยก 5 สภาวะตลาด (Market Regimes):
-    1. UPTREND (กำลังขึ้น)
-    2. PULLBACK (ย่อตัวในขาขึ้น)
-    3. SIDEWAYS (สะสมแรง / ไซด์เวย์)
-    4. OVERSOLD_BOUNCE (เด้งระยะสั้น/ขายมากเกินไป)
-    5. HEAVY_DROP (ลงแรง / โดนทุบหนัก / ขาลงชัดเจน)
-    """
     try:
         stock = yf.Ticker(ticker, session=get_yfinance_session())
         df = stock.history(period='2y', interval='1d')
-        if len(df) < 50 or df['Close'].iloc[-1] < 0.05:
+        if len(df) < 50 or df['Close'].iloc[-1] < 0.5:
             return None, None
 
         df.columns = [col.lower() for col in df.columns]
@@ -773,73 +775,47 @@ def check_ma_snr_combo(ticker, info_mode=False):
         fast_ma = df['close'].rolling(window=20).mean()
         slow_ma = df['close'].rolling(window=50).mean()
 
+        # คำนวณแนวรับ-แนวต้านจาก Swing & Fibonacci ของรอบคลื่นปัจจุบัน
         s1, s2, s3, r1, r2, r3, r4 = calculate_swing_snr(df, latest_close)
 
+        recent_3d_low = df['low'].tail(3).min()
+        near_support = recent_3d_low <= (s1 * 1.05)
+        is_green_candle = latest_close > df['open'].iloc[-1]
+        has_volume = df['volume'].iloc[-1] >= 200_000
+
         recent_8d_high = df['high'].tail(8).max()
-        drop_8d_pct = ((latest_close - recent_8d_high) / recent_8d_high) * 100
+        pullback_8d_pct = ((latest_close - recent_8d_high) / recent_8d_high) * 100
         
         recent_8d_low = df['low'].tail(8).min()
-        bounce_8d_pct = ((latest_close - recent_low_8d) / recent_low_8d) * 100 if recent_low_8d > 0 else 0.0
+        bounce_8d_pct = ((latest_close - recent_8d_low) / recent_8d_low) * 100
 
-        recent_20d_high = df['high'].tail(20).max()
-        drop_20d_pct = ((latest_close - recent_20d_high) / recent_20d_high) * 100
-
-        is_above_ma20 = latest_close >= fast_ma.iloc[-1]
-        is_above_ma50 = latest_close >= slow_ma.iloc[-1]
-        is_ma_bull = fast_ma.iloc[-1] >= slow_ma.iloc[-1]
-        
-        # คำนวณ % โครงสร้างขาขึ้น vs แรงกดดันขาลง
+        # คำนวณคะแนนภาพรวมขาขึ้น & โมเมนตัมกลับตัว (0-100%)
         bull_score = 0
-        if is_above_ma20: bull_score += 25
-        if is_above_ma50: bull_score += 25
-        if is_ma_bull: bull_score += 20
-        if 50 <= latest_rsi <= 72: bull_score += 15
-        elif 40 <= latest_rsi < 50: bull_score += 5
-        if drop_20d_pct > -15: bull_score += 15
+        if latest_close >= fast_ma.iloc[-1]: bull_score += 20
+        if latest_close >= slow_ma.iloc[-1]: bull_score += 15
+        if fast_ma.iloc[-1] >= slow_ma.iloc[-1]: bull_score += 15
+        if 48 <= latest_rsi <= 70: bull_score += 15
+        elif latest_rsi > 70: bull_score += 10
+        if bounce_8d_pct >= 3.0: bull_score += 20
+        if df['volume'].iloc[-1] > df['volume'].rolling(20).mean().iloc[-1]: bull_score += 15
         
-        bullish_pct = min(96.0, max(5.0, round(bull_score * 0.95 + 4.0, 1)))
-        bearish_pct = round(100.0 - bullish_pct, 1)
+        bullish_pct = min(96.0, max(12.0, round(bull_score * 0.9 + 5.0, 1)))
 
-        # ================= ตรรกะแยก 5 สภาวะตลาดแบบเฉียบขาด =================
-        # กรณี 1: ลงแรง / โดนทุบหนัก (Heavy Drop / Severe Downtrend)
-        if drop_8d_pct <= -25.0 or drop_20d_pct <= -35.0 or (not is_above_ma20 and not is_above_ma50 and latest_rsi < 42 and drop_8d_pct <= -18.0):
-            trend_status = "HEAVY_DROP"
-            status_title = "🔴 สภาวะ: ลงแรง / โดนทุบหนัก (ห้ามรับมีด)"
-            status_desc = f"⚠️ หุ้นถูกเทขายรุนแรง (ย่อตัวจากยอด 8 วัน {drop_8d_pct:.2f}%) แม้มีแรงเด้งสั้นแต่โครงสร้างเสียเปรียบ"
-            badge_text = f"📉 ขาลง/โดนทุบ: {bearish_pct}%"
-            badge_class = "badge-trend-bear"
-
-        # กรณี 2: กำลังขึ้นแข็งแกร่ง (Strong Uptrend)
-        elif is_above_ma20 and is_above_ma50 and is_ma_bull and latest_rsi >= 52 and drop_8d_pct > -10.0:
-            trend_status = "UPTREND"
-            status_title = "🟢 สภาวะ: กำลังขึ้นแข็งแกร่ง (Uptrend)"
-            status_desc = f"🚀 โมเมนตัมขาขึ้นสมบูรณ์ ยืนเหนือเส้นค่าเฉลี่ยทุกเส้น (ดีดตัวจากฐานล่าสุด +{bounce_8d_pct:.2f}%)"
-            badge_text = f"📈 กำลังขึ้น: {bullish_pct}%"
-            badge_class = "badge-trend-bull"
-
-        # กรณี 3: ย่อตัวในแนวโน้มขาขึ้น (Healthy Pullback / Buy on Dip)
-        elif is_above_ma50 and drop_8d_pct > -20.0 and latest_rsi >= 44:
+        if (near_support or bounce_8d_pct >= 2.5) and is_green_candle and (bullish_pct >= 65 or bounce_8d_pct >= 5.0):
+            trend_status = "BUY_SIGNAL"
+            status_desc = "🟢 ผ่านเงื่อนไขสัญญาณ BUY (ดีดตัวกลับตัวจากแนวรับ)"
+        elif bounce_8d_pct >= 3.0:
+            trend_status = "REVERSAL_BOUNCE"
+            status_desc = "🟡 หุ้นกำลังฟอร์มตัวกลับตัว/เด้งจากแนวรับ (Reversal Bounce)"
+        elif bullish_pct >= 50:
             trend_status = "PULLBACK"
-            status_title = "🟡 สภาวะ: กำลังย่อตัวในขาขึ้น (Healthy Pullback)"
-            status_desc = f"⏳ พักฐานสะสมกำลังตามรอบ (ย่อจากยอด 8 วัน {drop_8d_pct:.2f}%) มีโอกาสเด้งตามแนวรับ"
-            badge_text = f"⏳ ย่อตัวพักฐาน: {bullish_pct}%"
-            badge_class = "badge-trend-pull"
-
-        # กรณี 4: เด้งระยะสั้นจากภาวะขายมากเกินไป (Oversold Bounce / Technical Rebound)
-        elif latest_rsi < 36 or (bounce_8d_pct >= 6.0 and drop_8d_pct <= -15.0):
-            trend_status = "OVERSOLD_BOUNCE"
-            status_title = "🟣 สภาวะ: เด้งระยะสั้นจากขายมากเกินไป (Technical Rebound)"
-            status_desc = f"⚡ มีแรงดีดตัวสั้นๆ +{bounce_8d_pct:.2f}% หลังลงลึก (RSI: {latest_rsi}) ยังไม่ใช่การกลับตัวใหญ่"
-            badge_text = f"⚡ ลุ้นเด้งสั้น (RSI: {latest_rsi})"
-            badge_class = "badge-trend-pull"
-
-        # กรณี 5: ไซด์เวย์ / สะสมแรง (Consolidation / Sideways)
+            status_desc = "🟠 กำลังย่อตัว/พักฐานระยะสั้น (Buy on Dip)"
+        elif latest_rsi < 35:
+            trend_status = "OVERSOLD"
+            status_desc = "🟣 ขายมากเกินไป (Oversold) ลุ้นเด้งกลับตัวที่แนวรับ"
         else:
-            trend_status = "SIDEWAYS"
-            status_title = "⚪ สภาวะ: สะสมแรง / ไซด์เวย์ (Consolidation)"
-            status_desc = f"〰️ ราคาแกว่งตัวในกรอบสร้างฐาน ยังไม่มีทิศทางชัดเจน รอเบรกเอาท์แนวต้าน"
-            badge_text = f"〰️ สะสมแรง/ไซด์เวย์: {bullish_pct}%"
-            badge_class = "badge-trend-side"
+            trend_status = "DOWNTREND"
+            status_desc = "🔴 โครงสร้างชะลอตัว/แนวโน้มขาลง (รอสร้างฐานที่แนวรับ)"
 
         dist_from_sup = ((latest_close - s1) / s1) * 100
         pat_name, pat_score = calculate_ai_pattern_match(df)
@@ -861,13 +837,10 @@ def check_ma_snr_combo(ticker, info_mode=False):
             'pattern_name': pat_name,
             'pattern_score': pat_score,
             'bullish_pct': bullish_pct,
-            'bearish_pct': bearish_pct,
+            'bearish_pct': round(100.0 - bullish_pct, 1),
             'trend_status': trend_status,
-            'status_title': status_title,
             'status_desc': status_desc,
-            'badge_text': badge_text,
-            'badge_class': badge_class,
-            'drop_8d_pct': f'{drop_8d_pct:.2f}%',
+            'pullback_8d_pct': f'{pullback_8d_pct:.2f}%',
             'bounce_8d_pct': f'+{bounce_8d_pct:.2f}%'
         }
 
@@ -875,9 +848,8 @@ def check_ma_snr_combo(ticker, info_mode=False):
             co_info = get_company_info_and_holders(ticker)
             res_data.update(co_info)
 
-        # สำหรับ Tab 2 สแกนทั้งตลาด: คัดเฉพาะหุ้นที่กำลังขึ้น หรือย่อตัวสวย
         if not info_mode:
-            if not (trend_status in ["UPTREND", "PULLBACK"]):
+            if not (trend_status in ["BUY_SIGNAL", "REVERSAL_BOUNCE"]):
                 return None, df
 
         return res_data, df
@@ -914,22 +886,24 @@ with tab1:
                 company_full_name = res.get("longNameEn", single_ticker)
                 sector_desc = res.get("sectorTh", "N/A")
                 industry_desc = res.get("industryTh", "N/A")
-                t_status = res.get("trend_status", "SIDEWAYS")
+                t_status = res.get("trend_status", "BUY_SIGNAL")
+                bull_pct = res.get("bullish_pct", 50.0)
+                bear_pct = res.get("bearish_pct", 50.0)
 
                 st.markdown(f'<p class="company-header">{single_ticker} : {company_full_name}</p>', unsafe_allow_html=True)
                 st.markdown(f'<div class="sector-badge">🏷️ กลุ่มธุรกิจ: {sector_desc} | ย่อย: {industry_desc}</div>', unsafe_allow_html=True)
                 
-                # แสดงผลแถบสถานะตาม 5 หมวดหมู่อย่างถูกต้อง
-                if t_status == "UPTREND":
-                    st.success(f"{res['status_title']}\n\n{res['status_desc']} | ข้อมูล ณ วันที่: {res['Date']}")
+                # แสดงผลสถานะแนวโน้ม
+                if t_status == "BUY_SIGNAL":
+                    st.success(f"{res['status_desc']} (ดีดตัวจากก้น {res['bounce_8d_pct']}) | ณ วันที่: {res['Date']}")
+                elif t_status == "REVERSAL_BOUNCE":
+                    st.success(f"{res['status_desc']} (ดีดตัวขึ้นจากก้นล่าสุด {res['bounce_8d_pct']} | ย่อจาก High 8 วัน {res['pullback_8d_pct']}) | ณ วันที่: {res['Date']}")
                 elif t_status == "PULLBACK":
-                    st.warning(f"{res['status_title']}\n\n{res['status_desc']} | ข้อมูล ณ วันที่: {res['Date']}")
-                elif t_status == "OVERSOLD_BOUNCE":
-                    st.info(f"{res['status_title']}\n\n{res['status_desc']} | ข้อมูล ณ วันที่: {res['Date']}")
-                elif t_status == "SIDEWAYS":
-                    st.info(f"{res['status_title']}\n\n{res['status_desc']} | ข้อมูล ณ วันที่: {res['Date']}")
+                    st.warning(f"{res['status_desc']} (ย่อตัวจาก High 8 วัน {res['pullback_8d_pct']}) | ณ วันที่: {res['Date']}")
+                elif t_status == "OVERSOLD":
+                    st.info(f"{res['status_desc']} (RSI: {res['RSI']}) | ณ วันที่: {res['Date']}")
                 else:
-                    st.error(f"{res['status_title']}\n\n{res['status_desc']} | ข้อมูล ณ วันที่: {res['Date']}")
+                    st.error(f"{res['status_desc']} (ย่อตัวจาก High 8 วัน {res['pullback_8d_pct']}) | ณ วันที่: {res['Date']}")
 
                 # ปุ่ม Watchlist
                 if single_ticker not in st.session_state.watchlist:
@@ -957,8 +931,9 @@ with tab1:
 
                 st.markdown("---")
                 
-                # กล่อง Compact Board (แสดงป้ายสถานะถูกต้อง ไม่ทำให้สับสน)
+                # กล่อง Compact Board
                 st.markdown(f"#### {UI_LANG_MAP['analysis_title']}")
+                trend_badge_class = "badge-trend-bull" if bull_pct >= 60 else ("badge-trend-pull" if bull_pct >= 45 else "badge-trend-bear")
                 
                 st.markdown(f"""
                 <div class="compact-board">
@@ -968,9 +943,9 @@ with tab1:
                             <span class="price-main">${res['Price ($)']}</span>
                         </div>
                         <div class="price-badge-group">
-                            <span class="price-badge {res['badge_class']}">{res['badge_text']}</span>
+                            <span class="price-badge {trend_badge_class}">📈 ขาขึ้น/กลับตัว: {bull_pct}%</span>
+                            <span class="price-badge badge-dist">ดีดจากก้น 8 วัน: {res['bounce_8d_pct']}</span>
                             <span class="price-badge badge-rsi">RSI: {res['RSI']}</span>
-                            <span class="price-badge badge-dist">ห่างรับ 1: {res['Dist_Sup (%)']}</span>
                         </div>
                     </div>
                     <div class="snr-grid">
@@ -1172,7 +1147,7 @@ with tab2:
         server_state["last_scanned_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         if results:
             df_result_display = pd.DataFrame([item['res_data'] for item in results])[[
-                'Ticker', 'Price ($)', 'bullish_pct', 'Support 1 ($)', 'Support 2 ($)', 'Support 3 ($)', 'RSI', 
+                'Ticker', 'Price ($)', 'bullish_pct', 'bounce_8d_pct', 'Support 1 ($)', 'Support 2 ($)', 'Support 3 ($)', 'RSI', 
                 'Resist 1 ($)', 'Resist 2 ($)', 'Resist 3 ($)', 'Resist 4 ($)', 
                 'Volume', 'Date'
             ]]
@@ -1208,10 +1183,11 @@ with tab2:
                     ticker_found = res_data['Ticker']
                     raw_df_found = item.get('raw_df')
                     b_pct = res_data.get('bullish_pct', 70.0)
+                    bounce_str = res_data.get('bounce_8d_pct', '+0.0%')
 
                     with cols[c_offset]:
                         with st.container():
-                            st.markdown(f'<p style="font-size:0.92rem; font-weight:bold; color:#60A5FA; margin-bottom:0px;">🟢 {ticker_found} (ขาขึ้น {b_pct}%)</p>', unsafe_allow_html=True)
+                            st.markdown(f'<p style="font-size:0.92rem; font-weight:bold; color:#60A5FA; margin-bottom:0px;">🟢 {ticker_found} (ขาขึ้น {b_pct}% | เด้ง {bounce_str})</p>', unsafe_allow_html=True)
                             st.caption(f"Support 1: ${res_data['Support 1 ($)']} | ต้าน 1: ${res_data['Resist 1 ($)']} | RSI: {res_data['RSI']}")
                             
                             if ticker_found not in st.session_state.watchlist:
