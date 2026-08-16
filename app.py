@@ -15,7 +15,7 @@ import plotly.graph_objects as go
 # ================= ส่วนตั้งค่าแอปและภาษา =================
 UI_LANG_MAP = {
     'search_ticker_title': "US Stock Scanner PRO (Enterprise Edition)",
-    'search_ticker_subtitle': "ระบบสแกนทางเทคนิค พร้อมปุ่ม Timeframe บนกราฟ, 3 แนวรับ, 4 แนวต้าน และโครงสร้างผู้ถือหุ้น",
+    'search_ticker_subtitle': "ระบบสแกนทางเทคนิค พร้อม 3 แนวรับ, 4 แนวต้าน, โครงสร้างผู้ถือหุ้น และ AI Pattern",
     'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB):",
     'btn_analyze_single': "🔎 วิเคราะห์ทันที",
     'btn_scan_market': "🚀 เริ่มสแกนทั้ง 3 ตลาด (7,000+ หุ้น)",
@@ -313,18 +313,24 @@ def create_ta_chart(df, ticker, res_data):
             fig.add_shape(type="line", x0=earliest_date, y0=val, x1=latest_date, y1=val, line=dict(color=color, width=2, dash='dash'))
             fig.add_annotation(x=latest_date, y=val, text=f"{key.replace(' ($)', '')}: ${val}", bgcolor=color, font=dict(color="white"), ax=0, ay=ay_pos)
 
-    # ปุ่มเลือกช่วง Timeframe (H1, H4, 1M, 3M, 6M, 1Y, ALL) บนหัวกราฟ
+    # จัดการ Layout: ย้าย Title และ Rangeselector ให้อยู่คนละแถว และเปลี่ยนเมาส์เป็น Pan (ไม่ซูมอัตโนมัติ)
     fig.update_layout(
-        title=f'<b>{ticker}</b> | ราคาปัจจุบัน: <b>${res_data["Price ($)"]}</b> (RSI: {res_data.get("RSI", 0)})',
+        title=dict(
+            text=f'<b>{ticker}</b> | ราคาปัจจุบัน: <b>${res_data["Price ($)"]}</b> (RSI: {res_data.get("RSI", 0)})',
+            y=0.98,
+            x=0.01,
+            xanchor='left',
+            yanchor='top',
+            font=dict(size=14)
+        ),
         xaxis_rangeslider_visible=False,
         template='plotly_dark',
-        margin=dict(l=10, r=10, t=55, b=10),
-        height=390,
+        margin=dict(l=10, r=10, t=75, b=10),
+        height=400,
+        dragmode='pan',  # เปลี่ยนเมาส์เป็นโหมดลากจับ (ไม่เปิดกล่อง Zoom อัตโนมัติ)
         xaxis=dict(
             rangeselector=dict(
                 buttons=list([
-                    dict(count=1, label="H1", step="hour", stepmode="backward"),
-                    dict(count=4, label="H4", step="hour", stepmode="backward"),
                     dict(count=1, label="1M", step="month", stepmode="backward"),
                     dict(count=3, label="3M", step="month", stepmode="backward"),
                     dict(count=6, label="6M", step="month", stepmode="backward"),
@@ -335,7 +341,7 @@ def create_ta_chart(df, ticker, res_data):
                 activecolor="#2563EB",
                 font=dict(color="#FFFFFF", size=10),
                 x=0.01,
-                y=1.18,
+                y=1.12,
                 xanchor="left",
                 yanchor="top"
             ),
@@ -430,6 +436,14 @@ def check_ma_snr_combo(ticker, info_mode=False):
     return None, None
 
 
+# คอนฟิกสำหรับ Plotly: เปิด ModeBar กลับมา แต่ตัดปุ่ม Zoom ออกทั้งหมด
+PLOTLY_CONFIG = {
+    'displayModeBar': True,
+    'modeBarButtonsToRemove': ['zoom2d', 'zoomIn2d', 'zoomOut2d', 'select2d', 'lasso2d', 'autoScale2d'],
+    'displaylogo': False,
+    'responsive': True
+}
+
 # ================= สร้างหน้าจอแท็บหลัก =================
 tab1, tab2, tab3 = st.tabs([UI_LANG_MAP['tab_search_ticker'], UI_LANG_MAP['tab_scan_market'], UI_LANG_MAP['tab_watchlist']])
 
@@ -469,7 +483,7 @@ with tab1:
                     st.markdown(f"#### {UI_LANG_MAP['chart_title_single']}")
                     fig = create_ta_chart(raw_df, single_ticker, res)
                     if fig:
-                        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+                        st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
                     st.markdown(f'<div class="pattern-box">😊 {UI_LANG_MAP["placeholder_pattern_match"]}</div>', unsafe_allow_html=True)
 
                 st.markdown("---")
@@ -671,7 +685,7 @@ with tab2:
                     if raw_df_found is not None:
                         fig_gallery = create_ta_chart(raw_df_found, ticker_found, res_data)
                         if fig_gallery:
-                            st.plotly_chart(fig_gallery, use_container_width=True, config={'displayModeBar': False})
+                            st.plotly_chart(fig_gallery, use_container_width=True, config=PLOTLY_CONFIG)
                         st.markdown(f'<div class="pattern-box" style="font-size:0.75rem; padding:4px 8px;">😊 {UI_LANG_MAP["placeholder_pattern_match"]}</div>', unsafe_allow_html=True)
                     else:
                         st.warning("ไม่พบข้อมูลกราฟ")
