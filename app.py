@@ -1,4 +1,5 @@
 
+
 import concurrent.futures
 from datetime import datetime
 import os
@@ -313,7 +314,7 @@ def create_ta_chart(df, ticker, res_data):
             fig.add_shape(type="line", x0=earliest_date, y0=val, x1=latest_date, y1=val, line=dict(color=color, width=2, dash='dash'))
             fig.add_annotation(x=latest_date, y=val, text=f"{key.replace(' ($)', '')}: ${val}", bgcolor=color, font=dict(color="white"), ax=0, ay=ay_pos)
 
-    # จัดการ Layout: ย้าย Title และ Rangeselector ให้อยู่คนละแถว และเปลี่ยนเมาส์เป็น Pan (ไม่ซูมอัตโนมัติ)
+    # ตั้งค่า layout ให้เมาส์เริ่มต้นเป็น Pan และจัดตำแหน่ง Title ไม่ให้ชนปุ่มเลือกช่วงเวลา
     fig.update_layout(
         title=dict(
             text=f'<b>{ticker}</b> | ราคาปัจจุบัน: <b>${res_data["Price ($)"]}</b> (RSI: {res_data.get("RSI", 0)})',
@@ -327,7 +328,7 @@ def create_ta_chart(df, ticker, res_data):
         template='plotly_dark',
         margin=dict(l=10, r=10, t=75, b=10),
         height=400,
-        dragmode='pan',  # เปลี่ยนเมาส์เป็นโหมดลากจับ (ไม่เปิดกล่อง Zoom อัตโนมัติ)
+        dragmode='pan',  # ค่าเริ่มต้นของเมาส์เป็น Pan (โหมดเลื่อนจับ)
         xaxis=dict(
             rangeselector=dict(
                 buttons=list([
@@ -436,10 +437,9 @@ def check_ma_snr_combo(ticker, info_mode=False):
     return None, None
 
 
-# คอนฟิกสำหรับ Plotly: เปิด ModeBar กลับมา แต่ตัดปุ่ม Zoom ออกทั้งหมด
+# คอนฟิก Plotly: เปิดแถบเครื่องมือทั้งหมดครบถ้วน
 PLOTLY_CONFIG = {
     'displayModeBar': True,
-    'modeBarButtonsToRemove': ['zoom2d', 'zoomIn2d', 'zoomOut2d', 'select2d', 'lasso2d', 'autoScale2d'],
     'displaylogo': False,
     'responsive': True
 }
