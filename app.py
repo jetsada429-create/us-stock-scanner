@@ -15,7 +15,7 @@ import plotly.graph_objects as go
 # ================= ส่วนตั้งค่าแอปและภาษา =================
 UI_LANG_MAP = {
     'search_ticker_title': "US Stock Scanner PRO (Enterprise Edition)",
-    'search_ticker_subtitle': "ระบบสแกนทางเทคนิค พร้อม 3 แนวรับ, 4 แนวต้าน, โครงสร้างผู้ถือหุ้น และ AI Pattern",
+    'search_ticker_subtitle': "ระบบสแกนทางเทคนิค พร้อมปุ่ม Timeframe บนกราฟ, 3 แนวรับ, 4 แนวต้าน และโครงสร้างผู้ถือหุ้น",
     'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB):",
     'btn_analyze_single': "🔎 วิเคราะห์ทันที",
     'btn_scan_market': "🚀 เริ่มสแกนทั้ง 3 ตลาด (7,000+ หุ้น)",
@@ -48,7 +48,7 @@ if 'scan_results' not in st.session_state:
 if 'scan_df' not in st.session_state:
     st.session_state.scan_df = None
 
-# Modern FinTech UI Custom CSS Design
+# Custom CSS
 st.markdown(
     """
     <style>
@@ -77,7 +77,7 @@ st.markdown(
     .stButton > button {
         width: 100% !important;
         background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
-        color: white !important;
+        color: #FFFFFF !important;
         font-size: 0.95rem !important;
         font-weight: 700 !important;
         padding: 0.5rem 1rem !important;
@@ -86,55 +86,56 @@ st.markdown(
         box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25) !important;
     }
     .fin-card {
-        background: linear-gradient(145deg, #1E293B 0%, #0F172A 100%);
-        border: 1px solid #334155;
+        background: #0F172A !important;
+        border: 1px solid #334155 !important;
         border-radius: 10px;
-        padding: 10px 14px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        margin-bottom: 0.4rem;
+        padding: 12px 16px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        margin-bottom: 0.5rem;
+        color: #F8FAFC !important;
     }
     .fin-card-label {
-        font-size: 0.7rem;
-        color: #94A3B8;
+        font-size: 0.75rem;
+        color: #94A3B8 !important;
         font-weight: 600;
         text-transform: uppercase;
     }
     .fin-card-value {
-        font-size: 1.25rem;
+        font-size: 1.3rem;
         font-weight: 800;
-        color: #F8FAFC;
-        margin-top: 1px;
+        color: #FFFFFF !important;
+        margin-top: 2px;
     }
     .fin-card-sub {
-        font-size: 0.65rem;
-        color: #34D399;
-        margin-top: 1px;
+        font-size: 0.7rem;
+        color: #34D399 !important;
+        margin-top: 2px;
     }
     .company-header {
         font-size: 1.2rem;
         font-weight: 800;
-        color: #F8FAFC;
+        color: #38BDF8 !important;
         margin-bottom: 0rem;
     }
     .biz-summary {
-        font-size: 0.78rem !important;
-        color: #E2E8F0;
-        background-color: #1E293B;
-        padding: 10px !important;
+        font-size: 0.85rem !important;
+        color: #F1F5F9 !important;
+        background-color: #0B132B !important;
+        padding: 12px !important;
         border-radius: 8px;
-        border-left: 3px solid #3B82F6;
-        border: 1px solid #334155;
+        border-left: 4px solid #3B82F6 !important;
+        border: 1px solid #334155 !important;
         margin-bottom: 0.4rem;
-        line-height: 1.4;
+        line-height: 1.6;
     }
     .pattern-box {
-        background-color: #EFF6FF;
-        color: #1E40AF;
-        padding: 6px 10px;
+        background-color: #172554 !important;
+        color: #93C5FD !important;
+        padding: 8px 12px;
         border-radius: 8px;
-        font-size: 0.8rem;
+        font-size: 0.82rem;
         font-weight: 600;
-        border: 1px solid #BFDBFE;
+        border: 1px solid #1E40AF !important;
         margin-top: 6px;
         margin-bottom: 6px;
     }
@@ -150,21 +151,14 @@ st.markdown(f'<div class="main-title">{UI_LANG_MAP["search_ticker_title"]}</div>
 st.markdown(f'<div class="sub-title">{UI_LANG_MAP["search_ticker_subtitle"]}</div>', unsafe_allow_html=True)
 
 
-def translate_text_to_thai(text):
-    if not text or text == 'N/A':
-        return 'N/A'
+def get_base_directory():
     try:
-        url = "https://translate.googleapis.com/translate_a/single"
-        params = {"client": "gtx", "sl": "en", "tl": "th", "dt": "t", "q": text}
-        response = requests.get(url, params=params, timeout=5)
-        if response.status_code == 200:
-            res_json = response.json()
-            translated_text = "".join([item[0] for item in res_json[0] if item[0]])
-            if translated_text:
-                return translated_text
-    except Exception:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        if os.path.exists(script_dir):
+            return script_dir
+    except NameError:
         pass
-    return text
+    return os.getcwd()
 
 
 @st.cache_data(ttl=86400)
@@ -192,6 +186,23 @@ def get_us_stock_tickers():
         if isinstance(t, str) and str(t).strip().replace('-', '').isalpha()
     ]
     return sorted(list(set(cleaned_tickers)))
+
+
+def translate_text_to_thai(text):
+    if not text or text == 'N/A':
+        return 'N/A'
+    try:
+        url = "https://translate.googleapis.com/translate_a/single"
+        params = {"client": "gtx", "sl": "en", "tl": "th", "dt": "t", "q": text}
+        response = requests.get(url, params=params, timeout=5)
+        if response.status_code == 200:
+            res_json = response.json()
+            translated_text = "".join([item[0] for item in res_json[0] if item[0]])
+            if translated_text:
+                return translated_text
+    except Exception:
+        pass
+    return text
 
 
 @st.cache_data(ttl=3600)
@@ -302,13 +313,35 @@ def create_ta_chart(df, ticker, res_data):
             fig.add_shape(type="line", x0=earliest_date, y0=val, x1=latest_date, y1=val, line=dict(color=color, width=2, dash='dash'))
             fig.add_annotation(x=latest_date, y=val, text=f"{key.replace(' ($)', '')}: ${val}", bgcolor=color, font=dict(color="white"), ax=0, ay=ay_pos)
 
+    # ปุ่มเลือกช่วง Timeframe (H1, H4, 1M, 3M, 6M, 1Y, ALL) บนหัวกราฟ
     fig.update_layout(
         title=f'<b>{ticker}</b> | ราคาปัจจุบัน: <b>${res_data["Price ($)"]}</b> (RSI: {res_data.get("RSI", 0)})',
         xaxis_rangeslider_visible=False,
         template='plotly_dark',
-        margin=dict(l=10, r=10, t=35, b=10),
-        height=380,
-        xaxis_title="",
+        margin=dict(l=10, r=10, t=55, b=10),
+        height=390,
+        xaxis=dict(
+            rangeselector=dict(
+                buttons=list([
+                    dict(count=1, label="H1", step="hour", stepmode="backward"),
+                    dict(count=4, label="H4", step="hour", stepmode="backward"),
+                    dict(count=1, label="1M", step="month", stepmode="backward"),
+                    dict(count=3, label="3M", step="month", stepmode="backward"),
+                    dict(count=6, label="6M", step="month", stepmode="backward"),
+                    dict(count=1, label="1Y", step="year", stepmode="backward"),
+                    dict(step="all", label="ALL")
+                ]),
+                bgcolor="#1E293B",
+                activecolor="#2563EB",
+                font=dict(color="#FFFFFF", size=10),
+                x=0.01,
+                y=1.18,
+                xanchor="left",
+                yanchor="top"
+            ),
+            type="date",
+            title=""
+        ),
         yaxis_title="ราคา ($)",
         showlegend=False
     )
@@ -318,7 +351,7 @@ def create_ta_chart(df, ticker, res_data):
 def check_ma_snr_combo(ticker, info_mode=False):
     try:
         stock = yf.Ticker(ticker)
-        df = stock.history(period='1y', interval='1d')
+        df = stock.history(period='2y', interval='1d')
         if len(df) < 50 or df['Close'].iloc[-1] < 0.5:
             return None, None
 
@@ -436,7 +469,7 @@ with tab1:
                     st.markdown(f"#### {UI_LANG_MAP['chart_title_single']}")
                     fig = create_ta_chart(raw_df, single_ticker, res)
                     if fig:
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
                     st.markdown(f'<div class="pattern-box">😊 {UI_LANG_MAP["placeholder_pattern_match"]}</div>', unsafe_allow_html=True)
 
                 st.markdown("---")
@@ -519,7 +552,7 @@ with tab1:
                             xaxis_title="",
                             yaxis_title="M$"
                         )
-                        st.plotly_chart(fig_profit, use_container_width=True)
+                        st.plotly_chart(fig_profit, use_container_width=True, config={'displayModeBar': False})
                 else:
                     st.warning("ไม่พบข้อมูลกำไรสุทธิย้อนหลัง")
 
@@ -533,12 +566,14 @@ with tab1:
 
                 with st.expander(UI_LANG_MAP['expander_business_summary'], expanded=True):
                     st.markdown(f"""
-                    <div class="fin-card" style="margin-bottom: 10px;">
-                        <b>📊 โครงสร้างผู้ถือหุ้น & ข้อมูลบริษัท:</b><br>
-                        • จำนวนหุ้นที่มีทั้งหมด: <b>{shares_tot} หุ้น</b><br>
-                        • สถาบัน/บริษัทใหญ่ถือครอง: <b>{inst_pct}</b><br>
-                        • ผู้บริหาร/Insider ถือครอง: <b>{insider_pct}</b><br>
-                        • รายย่อยและอื่นๆ ถือครอง: <b>{retail_pct}</b>
+                    <div class="fin-card" style="margin-bottom: 12px; background: #0F172A; border: 1px solid #334155; padding: 14px; border-radius: 8px;">
+                        <b style="color: #60A5FA; font-size: 0.95rem;">📊 โครงสร้างผู้ถือหุ้น & ข้อมูลบริษัท:</b>
+                        <div style="color: #F8FAFC; line-height: 1.8; margin-top: 6px; font-size: 0.88rem;">
+                        • จำนวนหุ้นที่มีทั้งหมด: <b style="color: #FFFFFF;">{shares_tot} หุ้น</b><br>
+                        • สถาบัน/บริษัทใหญ่ถือครอง: <b style="color: #38BDF8;">{inst_pct}</b><br>
+                        • ผู้บริหาร/Insider ถือครอง: <b style="color: #FBBF24;">{insider_pct}</b><br>
+                        • รายย่อยและอื่นๆ ถือครอง: <b style="color: #34D399;">{retail_pct}</b>
+                        </div>
                     </div>
                     """, unsafe_allow_html=True)
 
@@ -636,7 +671,7 @@ with tab2:
                     if raw_df_found is not None:
                         fig_gallery = create_ta_chart(raw_df_found, ticker_found, res_data)
                         if fig_gallery:
-                            st.plotly_chart(fig_gallery, use_container_width=True)
+                            st.plotly_chart(fig_gallery, use_container_width=True, config={'displayModeBar': False})
                         st.markdown(f'<div class="pattern-box" style="font-size:0.75rem; padding:4px 8px;">😊 {UI_LANG_MAP["placeholder_pattern_match"]}</div>', unsafe_allow_html=True)
                     else:
                         st.warning("ไม่พบข้อมูลกราฟ")
