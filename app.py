@@ -1,5 +1,4 @@
 
-
 import concurrent.futures
 from datetime import datetime
 import os
@@ -16,7 +15,7 @@ import plotly.graph_objects as go
 # ================= ส่วนตั้งค่าแอปและภาษา =================
 UI_LANG_MAP = {
     'search_ticker_title': "US Stock Scanner PRO (Enterprise Edition)",
-    'search_ticker_subtitle': "ระบบสแกนทางเทคนิค พร้อม 3 แนวรับ, 4 แนวต้าน, โครงสร้างผู้ถือหุ้น และ AI Pattern",
+    'search_ticker_subtitle': "ระบบสแกนทางเทคนิค พร้อมระบุกลุ่มธุรกิจ, 3 แนวรับ, 4 แนวต้าน, โครงสร้างผู้ถือหุ้น และ AI Pattern",
     'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB):",
     'btn_analyze_single': "🔎 วิเคราะห์ทันที",
     'btn_scan_market': "🚀 เริ่มสแกนทั้ง 3 ตลาด (7,000+ หุ้น)",
@@ -33,6 +32,21 @@ UI_LANG_MAP = {
     'tab_search_ticker': "🔍 ค้นหา & วิเคราะห์รายตัว",
     'tab_scan_market': "🚀 สแกนคัดหุ้นทรงสวย",
     'tab_watchlist': "⭐ Watchlist ส่วนตัว",
+}
+
+# พจนานุกรมหมวดหมู่กลุ่มธุรกิจ (Sector Mapping)
+SECTOR_MAP_TH = {
+    'Technology': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์',
+    'Healthcare': '🏥 สุขภาพ / การแพทย์ & ยา',
+    'Financial Services': '🏦 การเงิน / ธนาคาร & ประกันภัย',
+    'Industrials': '🏭 อุตสาหกรรม / อวกาศ & การป้องกันประเทศ / ขนส่ง',
+    'Consumer Cyclical': '🛍️ สินค้าฟุ่มเฟือย / ค้าปลีก & ยานยนต์',
+    'Consumer Defensive': '🛒 สินค้าอุปโภคบริโภคจำเป็น',
+    'Energy': '⚡ พลังงาน / น้ำมัน, ก๊าซ & พลังงานสะอาด',
+    'Real Estate': '🏢 อสังหาริมทรัพย์ / กองรีท (REITs)',
+    'Basic Materials': '🧪 วัตถุดิบพื้นฐาน / เคมีภัณฑ์ & เหมืองแร่',
+    'Communication Services': '📡 สื่อสาร / โทรคมนาคม & บันเทิง/มีเดีย',
+    'Utilities': '💡 สาธารณูปโภค / ไฟฟ้า & ประปา'
 }
 
 st.set_page_config(
@@ -117,6 +131,28 @@ st.markdown(
         font-weight: 800;
         color: #38BDF8 !important;
         margin-bottom: 0rem;
+    }
+    .sector-badge {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #FCD34D;
+        background: #451A03;
+        border: 1px solid #78350F;
+        padding: 4px 8px;
+        border-radius: 6px;
+        display: inline-block;
+        margin-top: 4px;
+        margin-bottom: 6px;
+    }
+    .chart-header-badge {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #F8FAFC;
+        background-color: #1E293B;
+        padding: 6px 10px;
+        border-radius: 6px;
+        margin-bottom: 4px;
+        display: inline-block;
     }
     .biz-summary {
         font-size: 0.85rem !important;
@@ -216,6 +252,12 @@ def get_company_info_and_holders(ticker):
         th_summary = translate_text_to_thai(eng_summary) if eng_summary != 'N/A' else 'N/A'
         company_name = info.get('longName', ticker)
         
+        # ดึงและแปลงกลุ่มธุรกิจ (Sector & Industry)
+        raw_sector = info.get('sector', 'N/A')
+        raw_industry = info.get('industry', 'N/A')
+        sector_th = SECTOR_MAP_TH.get(raw_sector, raw_sector)
+        industry_th = translate_text_to_thai(raw_industry) if raw_industry != 'N/A' else 'N/A'
+        
         shares_out = info.get('sharesOutstanding', 0)
         shares_out_str = f"{shares_out:,.0f}" if shares_out else "N/A"
         
@@ -232,6 +274,8 @@ def get_company_info_and_holders(ticker):
 
         return {
             'longNameEn': company_name,
+            'sectorTh': sector_th,
+            'industryTh': industry_th,
             'summaryTh': th_summary,
             'sharesOutstanding': shares_out_str,
             'institutionalHeld': inst_held_pct,
@@ -241,6 +285,8 @@ def get_company_info_and_holders(ticker):
     except Exception:
         return {
             'longNameEn': ticker,
+            'sectorTh': 'N/A',
+            'industryTh': 'N/A',
             'summaryTh': 'N/A',
             'sharesOutstanding': 'N/A',
             'institutionalHeld': 'N/A',
@@ -314,21 +360,12 @@ def create_ta_chart(df, ticker, res_data):
             fig.add_shape(type="line", x0=earliest_date, y0=val, x1=latest_date, y1=val, line=dict(color=color, width=2, dash='dash'))
             fig.add_annotation(x=latest_date, y=val, text=f"{key.replace(' ($)', '')}: ${val}", bgcolor=color, font=dict(color="white"), ax=0, ay=ay_pos)
 
-    # ตั้งค่า layout ให้เมาส์เริ่มต้นเป็น Pan และจัดตำแหน่ง Title ไม่ให้ชนปุ่มเลือกช่วงเวลา
     fig.update_layout(
-        title=dict(
-            text=f'<b>{ticker}</b> | ราคาปัจจุบัน: <b>${res_data["Price ($)"]}</b> (RSI: {res_data.get("RSI", 0)})',
-            y=0.98,
-            x=0.01,
-            xanchor='left',
-            yanchor='top',
-            font=dict(size=14)
-        ),
         xaxis_rangeslider_visible=False,
         template='plotly_dark',
-        margin=dict(l=10, r=10, t=75, b=10),
-        height=400,
-        dragmode='pan',  # ค่าเริ่มต้นของเมาส์เป็น Pan (โหมดเลื่อนจับ)
+        margin=dict(l=10, r=10, t=35, b=10),
+        height=380,
+        dragmode='pan',
         xaxis=dict(
             rangeselector=dict(
                 buttons=list([
@@ -341,7 +378,7 @@ def create_ta_chart(df, ticker, res_data):
                 bgcolor="#1E293B",
                 activecolor="#2563EB",
                 font=dict(color="#FFFFFF", size=10),
-                x=0.01,
+                x=0.0,
                 y=1.12,
                 xanchor="left",
                 yanchor="top"
@@ -437,7 +474,6 @@ def check_ma_snr_combo(ticker, info_mode=False):
     return None, None
 
 
-# คอนฟิก Plotly: เปิดแถบเครื่องมือทั้งหมดครบถ้วน
 PLOTLY_CONFIG = {
     'displayModeBar': True,
     'displaylogo': False,
@@ -465,7 +501,11 @@ with tab1:
 
             if res:
                 company_full_name = res.get("longNameEn", single_ticker)
+                sector_desc = res.get("sectorTh", "N/A")
+                industry_desc = res.get("industryTh", "N/A")
+
                 st.markdown(f'<p class="company-header">{single_ticker} : {company_full_name}</p>', unsafe_allow_html=True)
+                st.markdown(f'<div class="sector-badge">🏷️ กลุ่มธุรกิจ: {sector_desc} | ย่อย: {industry_desc}</div>', unsafe_allow_html=True)
                 st.success(UI_LANG_MAP['success_stock_found_single'].format(ticker=single_ticker) + f' | ข้อมูล ณ วันที่: {res["Date"]}')
                 
                 if single_ticker not in st.session_state.watchlist:
@@ -481,6 +521,7 @@ with tab1:
 
                 if raw_df is not None:
                     st.markdown(f"#### {UI_LANG_MAP['chart_title_single']}")
+                    st.markdown(f'<div class="chart-header-badge">{single_ticker} | ราคาปัจจุบัน: ${res["Price ($)"]} (RSI: {res.get("RSI", 0)})</div>', unsafe_allow_html=True)
                     fig = create_ta_chart(raw_df, single_ticker, res)
                     if fig:
                         st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
@@ -498,12 +539,6 @@ with tab1:
                         <div class="fin-card-sub">RSI (14): {res['RSI']}</div>
                     </div>
                     """, unsafe_allow_html=True)
-                    st.markdown(f"""
-                    <div class="fin-card">
-                        <div class="fin-card-label">🛡️ แนวรับ 2</div>
-                        <div class="fin-card-value">${res['Support 2 ($)']}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
                 with col_m2:
                     st.markdown(f"""
                     <div class="fin-card">
@@ -512,6 +547,16 @@ with tab1:
                         <div class="fin-card-sub">{res['Dist_Sup (%)']} จากราคาปัจจุบัน</div>
                     </div>
                     """, unsafe_allow_html=True)
+
+                col_m3, col_m4 = st.columns(2)
+                with col_m3:
+                    st.markdown(f"""
+                    <div class="fin-card">
+                        <div class="fin-card-label">🛡️ แนวรับ 2</div>
+                        <div class="fin-card-value">${res['Support 2 ($)']}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col_m4:
                     st.markdown(f"""
                     <div class="fin-card">
                         <div class="fin-card-label">🛡️ แนวรับ 3 (ลึกสุด)</div>
@@ -527,12 +572,6 @@ with tab1:
                         <div class="fin-card-value">${res['Resist 1 ($)']}</div>
                     </div>
                     """, unsafe_allow_html=True)
-                    st.markdown(f"""
-                    <div class="fin-card">
-                        <div class="fin-card-label">⚡ แนวต้าน 3</div>
-                        <div class="fin-card-value">${res['Resist 3 ($)']}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
                 with col_r2:
                     st.markdown(f"""
                     <div class="fin-card">
@@ -540,6 +579,16 @@ with tab1:
                         <div class="fin-card-value">${res['Resist 2 ($)']}</div>
                     </div>
                     """, unsafe_allow_html=True)
+
+                col_r3, col_r4 = st.columns(2)
+                with col_r3:
+                    st.markdown(f"""
+                    <div class="fin-card">
+                        <div class="fin-card-label">⚡ แนวต้าน 3</div>
+                        <div class="fin-card-value">${res['Resist 3 ($)']}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col_r4:
                     st.markdown(f"""
                     <div class="fin-card">
                         <div class="fin-card-label">🚀 แนวต้าน 4</div>
@@ -583,6 +632,8 @@ with tab1:
                     <div class="fin-card" style="margin-bottom: 12px; background: #0F172A; border: 1px solid #334155; padding: 14px; border-radius: 8px;">
                         <b style="color: #60A5FA; font-size: 0.95rem;">📊 โครงสร้างผู้ถือหุ้น & ข้อมูลบริษัท:</b>
                         <div style="color: #F8FAFC; line-height: 1.8; margin-top: 6px; font-size: 0.88rem;">
+                        • กลุ่มธุรกิจหลัก: <b style="color: #FCD34D;">{sector_desc}</b><br>
+                        • อุตสาหกรรมย่อย: <b style="color: #E2E8F0;">{industry_desc}</b><br>
                         • จำนวนหุ้นที่มีทั้งหมด: <b style="color: #FFFFFF;">{shares_tot} หุ้น</b><br>
                         • สถาบัน/บริษัทใหญ่ถือครอง: <b style="color: #38BDF8;">{inst_pct}</b><br>
                         • ผู้บริหาร/Insider ถือครอง: <b style="color: #FBBF24;">{insider_pct}</b><br>
@@ -645,7 +696,7 @@ with tab2:
         st.session_state.scan_results = results
         if results:
             df_result_display = pd.DataFrame([item['res_data'] for item in results])[[
-                'Ticker', 'longNameEn', 'Price ($)', 'Support 1 ($)', 'Support 2 ($)', 'Support 3 ($)', 'Dist_Sup (%)', 'RSI', 
+                'Ticker', 'longNameEn', 'sectorTh', 'Price ($)', 'Support 1 ($)', 'Support 2 ($)', 'Support 3 ($)', 'Dist_Sup (%)', 'RSI', 
                 'Resist 1 ($)', 'Resist 2 ($)', 'Resist 3 ($)', 'Resist 4 ($)', 
                 'sharesOutstanding', 'institutionalHeld', 'retailHeld', 'Volume', 'Date'
             ]]
@@ -673,6 +724,7 @@ with tab2:
             res_data = item['res_data']
             ticker_found = res_data['Ticker']
             co_name = res_data.get('longNameEn', ticker_found)
+            sec_name = res_data.get('sectorTh', 'N/A')
             shares = res_data.get('sharesOutstanding', 'N/A')
             inst = res_data.get('institutionalHeld', 'N/A')
             raw_df_found = item.get('raw_df')
@@ -680,9 +732,10 @@ with tab2:
             with cols[col_idx % 2]:
                 with st.container():
                     st.markdown(f'<p style="font-size:0.95rem; font-weight:bold; color:#60A5FA; margin-bottom:0px;">🟢 {ticker_found} : {co_name}</p>', unsafe_allow_html=True)
-                    st.caption(f"Support 1: ${res_data['Support 1 ($)']} | ต้าน1: ${res_data['Resist 1 ($)']} | หุ้นทั้งหมด: {shares} | สถาบัน: {inst}")
+                    st.caption(f"🏷️ กลุ่มธุรกิจ: {sec_name} | Support 1: ${res_data['Support 1 ($)']} | ต้าน1: ${res_data['Resist 1 ($)']} | หุ้นทั้งหมด: {shares} | สถาบัน: {inst}")
                     
                     if raw_df_found is not None:
+                        st.markdown(f'<div class="chart-header-badge">{ticker_found} | ราคาปัจจุบัน: ${res_data["Price ($)"]} (RSI: {res_data.get("RSI", 0)})</div>', unsafe_allow_html=True)
                         fig_gallery = create_ta_chart(raw_df_found, ticker_found, res_data)
                         if fig_gallery:
                             st.plotly_chart(fig_gallery, use_container_width=True, config=PLOTLY_CONFIG)
