@@ -220,6 +220,7 @@ st.markdown(
     .badge-trend-support { background: #1E3A8A; color: #93C5FD; border: 1px solid #1D4ED8; }
     .badge-trend-side { background: #1E293B; color: #94A3B8; border: 1px solid #475569; }
     .badge-ai-box { background: #172554; color: #93C5FD; border: 1px solid #1E40AF; font-weight: 700; }
+    .badge-market { background: #1e1b4b; color: #c7d2fe; border: 1px solid #4338ca; font-weight: 700; }
 
     .snr-grid {
         display: grid;
@@ -370,18 +371,25 @@ st.markdown(
 st.markdown(f'<div class="main-title">{UI_LANG_MAP["search_ticker_title"]}</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="sub-title">{UI_LANG_MAP["search_ticker_subtitle"]}</div>', unsafe_allow_html=True)
 
-# ================= 4. ระบบดึงรายชื่อหุ้น S&P 500, NASDAQ 100 และ Growth ตัวจริง =================
+# ================= 4. ระบบดึงรายชื่อหุ้นและจับคู่ตลาด (NASDAQ / NYSE / AMEX) =================
 @st.cache_data(ttl=86400)
-def get_us_stock_tickers(scope="TOP500"):
-    tickers = []
+def get_us_stock_directory(scope="TOP500"):
+    """
+    ดึงรายชื่อหุ้นและตรวจจับตลาด (Exchange Mapping) ของหุ้นแต่ละตัว
+    """
+    items = []
     
-    # 1. ดึง S&P 500 ตัวจริงจาก Wikipedia (ครบทุกหมวดตัวอักษร A-Z)
+    # 1. ดึง S&P 500 ตัวจริงจาก Wikipedia
     try:
         url_sp500 = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
         tables = pd.read_html(url_sp500)
         sp500_df = tables[0]
-        sp500_tickers = sp500_df['Symbol'].str.replace('.', '-', regex=False).tolist()
-        tickers.extend(sp500_tickers)
+        for _, row in sp500_df.iterrows():
+            sym = str(row['Symbol']).replace('.', '-').strip().upper()
+            ex = "NYSE"
+            if 'Security' in sp500_df.columns and 'Exchange' in sp500_df.columns:
+                ex = "NASDAQ" if "NASDAQ" in str(row.get('Exchange', '')).upper() else "NYSE"
+            items.append({'ticker': sym, 'exchange': ex})
     except Exception:
         pass
 
@@ -389,56 +397,62 @@ def get_us_stock_tickers(scope="TOP500"):
     try:
         url_nasdaq = "https://en.wikipedia.org/wiki/Nasdaq-100"
         tables_nd = pd.read_html(url_nasdaq)
-        # ตารางรายชื่อ NASDAQ 100 มักเป็นตารางที่ 4 หรือ 5
         for t in tables_nd:
-            if 'Ticker' in t.columns:
-                tickers.extend(t['Ticker'].str.replace('.', '-', regex=False).tolist())
-                break
-            elif 'Symbol' in t.columns:
-                tickers.extend(t['Symbol'].str.replace('.', '-', regex=False).tolist())
+            col_name = 'Ticker' if 'Ticker' in t.columns else ('Symbol' if 'Symbol' in t.columns else None)
+            if col_name:
+                for sym in t[col_name].dropna():
+                    s_clean = str(sym).replace('.', '-').strip().upper()
+                    items.append({'ticker': s_clean, 'exchange': 'NASDAQ'})
                 break
     except Exception:
         pass
 
-    # 3. หุ้น Growth & Momentum ยอดนิยมที่ต้องมีเสมอ
-    top_growth_stocks = [
-        'NVDA', 'PLTR', 'TSLA', 'AMD', 'ARM', 'SMCI', 'RKLB', 'AAOI', 'CRWV', 'RXT', 'BZAI',
-        'SOFI', 'MARA', 'RIOT', 'COIN', 'HOOD', 'MSTR', 'DKNG', 'HIMS', 'APP', 'ASTS', 'RDDT',
-        'AFRM', 'IREN', 'WULF', 'CIFR', 'CLSK', 'IONQ', 'RGTI', 'QBTS', 'SOUN', 'BBAI', 'AI',
-        'PATH', 'SNOW', 'MDB', 'DDOG', 'ZS', 'NET', 'CRWD', 'PANW', 'FTNT', 'OKTA', 'AVGO',
-        'MRVL', 'ON', 'MPWR', 'ALAB', 'VRT', 'POWI', 'AMAT', 'LRCX', 'KLAC', 'ASML', 'TSM'
+    # 3. หุ้น Growth & Momentum ชั้นนำ
+    extra_tickers = [
+        ('NVDA', 'NASDAQ'), ('PLTR', 'NYSE'), ('TSLA', 'NASDAQ'), ('AMD', 'NASDAQ'), ('ARM', 'NASDAQ'),
+        ('SMCI', 'NASDAQ'), ('RKLB', 'NASDAQ'), ('AAOI', 'NASDAQ'), ('CRWV', 'NASDAQ'), ('RXT', 'NASDAQ'),
+        ('BZAI', 'NASDAQ'), ('SOFI', 'NASDAQ'), ('MARA', 'NASDAQ'), ('RIOT', 'NASDAQ'), ('COIN', 'NASDAQ'),
+        ('HOOD', 'NASDAQ'), ('MSTR', 'NASDAQ'), ('DKNG', 'NASDAQ'), ('HIMS', 'NYSE'), ('APP', 'NASDAQ'),
+        ('ASTS', 'NASDAQ'), ('RDDT', 'NYSE'), ('AFRM', 'NASDAQ'), ('IREN', 'NASDAQ'), ('WULF', 'NASDAQ'),
+        ('CIFR', 'NASDAQ'), ('CLSK', 'NASDAQ'), ('IONQ', 'NYSE'), ('RGTI', 'NASDAQ'), ('QBTS', 'NYSE'),
+        ('SOUN', 'NASDAQ'), ('BBAI', 'NYSE'), ('AI', 'NYSE'), ('PATH', 'NYSE'), ('SNOW', 'NYSE'),
+        ('MDB', 'NASDAQ'), ('DDOG', 'NASDAQ'), ('ZS', 'NASDAQ'), ('NET', 'NYSE'), ('CRWD', 'NASDAQ'),
+        ('PANW', 'NASDAQ'), ('FTNT', 'NASDAQ'), ('OKTA', 'NASDAQ'), ('AVGO', 'NASDAQ'), ('MRVL', 'NASDAQ'),
+        ('ON', 'NASDAQ'), ('MPWR', 'NASDAQ'), ('ALAB', 'NASDAQ'), ('VRT', 'NYSE'), ('POWI', 'NASDAQ'),
+        ('AMAT', 'NASDAQ'), ('LRCX', 'NASDAQ'), ('KLAC', 'NASDAQ'), ('ASML', 'NASDAQ'), ('TSM', 'NYSE')
     ]
-    tickers.extend(top_growth_stocks)
+    for sym, ex in extra_tickers:
+        items.append({'ticker': sym, 'exchange': ex})
 
     # 4. หากเลือกสแกนทั้งหมด (ALL) ดึงจาก SEC API เพิ่มเติม
     if scope == "ALL":
         try:
             sec_url = "https://www.sec.gov/files/company_tickers.json"
             headers = {'User-Agent': 'USStockScannerApp/2.0 (admin@stockscannerpro.org)'}
-            r = requests.get(sec_url, headers=headers, timeout=5)
+            r = requests.get(sec_url, headers=headers, timeout=4)
             if r.status_code == 200:
                 data = r.json()
-                for item in data.values():
-                    t = str(item.get('ticker', '')).strip().upper().replace('.', '-')
+                for v in data.values():
+                    t = str(v.get('ticker', '')).strip().upper().replace('.', '-')
                     if t and t.isalpha() and len(t) <= 5:
-                        tickers.append(t)
+                        items.append({'ticker': t, 'exchange': 'US Market'})
         except Exception:
             pass
 
-    # กรอง Ticker ซ้ำและทำความสะอาด
-    clean_tickers = []
+    # กรอง Ticker ซ้ำและรักษารายการ
+    unique_items = []
     seen = set()
-    for t in tickers:
-        t_clean = str(t).strip().upper()
-        if t_clean and t_clean not in seen and len(t_clean) <= 6:
-            clean_tickers.append(t_clean)
-            seen.add(t_clean)
+    for item in items:
+        sym = item['ticker']
+        if sym and sym not in seen and len(sym) <= 6:
+            unique_items.append(item)
+            seen.add(sym)
 
     if scope == "TOP500":
-        return clean_tickers[:500]
+        return unique_items[:500]
     elif scope == "GROWTH1000":
-        return clean_tickers[:1000]
-    return clean_tickers[:2500] # สแกนชุดสภาพคล่องสูง 2,500 ตัวเพื่อความเร็วและไม่โดนบล็อก
+        return unique_items[:1000]
+    return unique_items[:2500]
 
 # ================= 5. ฟังก์ชันดึงประวัติราคา Dual-Engine =================
 def fetch_stock_history_dual(ticker):
@@ -458,6 +472,8 @@ def fetch_stock_history_dual(ticker):
                 r = result[0]
                 timestamps = r.get('timestamp', [])
                 quote = r.get('indicators', {}).get('quote', [{}])[0]
+                meta = r.get('meta', {})
+                exchange_name = meta.get('exchangeName', '')
                 if timestamps and quote:
                     df = pd.DataFrame({
                         'open': quote.get('open', []),
@@ -468,7 +484,9 @@ def fetch_stock_history_dual(ticker):
                     }, index=pd.to_datetime(timestamps, unit='s'))
                     df = df.dropna(subset=['close'])
                     if len(df) >= 15:
-                        return df
+                        # หาชื่อตลาดจริงจาก metadata
+                        market_tag = "NASDAQ" if "NMS" in exchange_name or "NGM" in exchange_name or "NASDAQ" in exchange_name.upper() else ("NYSE" if "NYQ" in exchange_name or "NYSE" in exchange_name.upper() else ("AMEX" if "ASE" in exchange_name or "AMEX" in exchange_name.upper() else "US Market"))
+                        return df, market_tag
     except Exception:
         pass
 
@@ -480,11 +498,11 @@ def fetch_stock_history_dual(ticker):
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
             df.columns = [str(c).lower() for c in df.columns]
-            return df
+            return df, "US Market"
     except Exception:
         pass
 
-    return None
+    return None, "US Market"
 
 
 def calculate_swing_snr(df, latest_close):
@@ -726,13 +744,24 @@ def create_ta_chart(df, ticker, res_data):
     return fig
 
 
-# ================= 6. ฟังก์ชันวิเคราะห์หลัก (จำแนกลักษณะแท่งเทียน 1D อย่างแม่นยำ) =================
+# ================= 6. ฟังก์ชันวิเคราะห์หลัก (พร้อมระบุตลาด Exchange) =================
 @st.cache_data(ttl=300)
-def check_ma_snr_combo(ticker, info_mode=False):
+def check_ma_snr_combo(item_input, info_mode=False):
     try:
-        df = fetch_stock_history_dual(ticker)
+        # รองรับทั้งแบบส่งเป็นชื่อ Ticker ตรงๆ หรือเป็น Dictionary {'ticker': 'NVDA', 'exchange': 'NASDAQ'}
+        if isinstance(item_input, dict):
+            ticker = item_input.get('ticker', '')
+            hint_exchange = item_input.get('exchange', 'US Market')
+        else:
+            ticker = str(item_input)
+            hint_exchange = 'US Market'
+
+        df, detected_exchange = fetch_stock_history_dual(ticker)
         if df is None or df.empty or len(df) < 15:
             return None, None
+
+        # สรุปชื่อตลาดที่ถูกต้อง
+        final_exchange = detected_exchange if detected_exchange != "US Market" else hint_exchange
 
         latest_close = float(df['close'].iloc[-1])
         latest_open = float(df['open'].iloc[-1])
@@ -823,6 +852,7 @@ def check_ma_snr_combo(ticker, info_mode=False):
 
         res_data = {
             'Ticker': ticker,
+            'Exchange': final_exchange,
             'Price ($)': round(latest_close, 2),
             'Support 1 ($)': s1,
             'Support 2 ($)': s2,
@@ -868,7 +898,7 @@ tab1, tab2, tab3 = st.tabs([UI_LANG_MAP['tab_search_ticker'], UI_LANG_MAP['tab_s
 with tab1:
     col_in1, col_in2 = st.columns([3, 1])
     with col_in1:
-        single_ticker = st.text_input(UI_LANG_MAP['search_ticker_label'], value='CRWV').strip().upper()
+        single_ticker = st.text_input(UI_LANG_MAP['search_ticker_label'], value='NVDA').strip().upper()
     with col_in2:
         st.markdown("<div class='desktop-only-space'></div>", unsafe_allow_html=True)
         search_btn = st.button(UI_LANG_MAP['btn_analyze_single'])
@@ -883,8 +913,9 @@ with tab1:
                 company_full_name = res.get("longNameEn", single_ticker)
                 sector_desc = res.get("sectorTh", "N/A")
                 industry_desc = res.get("industryTh", "N/A")
+                exchange_desc = res.get("Exchange", "US Market")
 
-                st.markdown(f'<p class="company-header">{single_ticker} : {company_full_name}</p>', unsafe_allow_html=True)
+                st.markdown(f'<p class="company-header">{single_ticker} : {company_full_name} <span class="price-badge badge-market">🏛️ {exchange_desc}</span></p>', unsafe_allow_html=True)
                 st.markdown(f'<div class="sector-badge">🏷️ กลุ่มธุรกิจ: {sector_desc} | ย่อย: {industry_desc}</div>', unsafe_allow_html=True)
                 
                 # แสดงผลแถบสถานะพร้อมเปลี่ยนสีพื้นหลัง 5 สีอย่างชัดเจน
@@ -911,7 +942,7 @@ with tab1:
                 # กราฟแท่งเทียน
                 if raw_df is not None:
                     st.markdown(f"#### {UI_LANG_MAP['chart_title_single']}")
-                    st.markdown(f'<div class="chart-header-badge">{single_ticker} | ล่าสุด: ${res.get("Price ($)", 0)} (RSI: {res.get("RSI", 0)})</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="chart-header-badge">{single_ticker} ({exchange_desc}) | ล่าสุด: ${res.get("Price ($)", 0)} (RSI: {res.get("RSI", 0)})</div>', unsafe_allow_html=True)
                     fig = create_ta_chart(raw_df, single_ticker, res)
                     if fig:
                         st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG, key=f"chart_single_{single_ticker}")
@@ -933,6 +964,7 @@ with tab1:
                             <span class="price-main">${res.get('Price ($)', 0)}</span>
                         </div>
                         <div class="price-badge-group">
+                            <span class="price-badge badge-market">🏛️ {exchange_desc}</span>
                             <span class="price-badge {badge_class}">{badge_label}</span>
                             <span class="price-badge badge-ai-box">🤖 AI Pattern: {pat_name} ({pat_score}%)</span>
                             <span class="price-badge badge-rsi">RSI: {res.get('RSI', 0)}</span>
@@ -1062,6 +1094,7 @@ with tab1:
                     <div class="fin-card">
                         <b style="color: #60A5FA; font-size: 0.88rem;">📊 โครงสร้างผู้ถือหุ้น & ข้อมูลบริษัท:</b>
                         <div style="color: #F8FAFC; line-height: 1.7; margin-top: 4px; font-size: 0.82rem;">
+                        • ตลาดซื้อขาย: <b style="color: #38BDF8;">{exchange_desc}</b><br>
                         • กลุ่มธุรกิจ: <b style="color: #FCD34D;">{sector_desc}</b><br>
                         • อุตสาหกรรมย่อย: <b style="color: #E2E8F0;">{industry_desc}</b><br>
                         • จำนวนหุ้นทั้งหมด: <b style="color: #FFFFFF;">{shares_tot} หุ้น</b><br>
@@ -1080,7 +1113,7 @@ with tab1:
                 st.error(f"❌ ไม่พบข้อมูลสัญลักษณ์หุ้น **{single_ticker}** ในระบบ กรุณาตรวจสอบชื่อ Ticker อีกครั้ง")
 
 
-# --- TAB 2: สแกนคัดหุ้นทั้งตลาด ---
+# --- TAB 2: สแกนคัดหุ้นทั้งตลาด (พร้อมตัวกรองตลาด NASDAQ, NYSE, AMEX แยกอิสระ) ---
 with tab2:
     st.markdown("### 🚀 สแกนหาหุ้นทรงสวยประจำวัน (NASDAQ, NYSE, AMEX)")
     
@@ -1094,7 +1127,7 @@ with tab2:
     # เมนูเลือกขอบเขตการสแกน
     scan_scope = st.radio(
         "🎯 เลือกขอบเขตและจำนวนหุ้นที่จะสแกน:",
-        ["⚡ หุ้นผู้นำตลาด S&P 500 & Top Tech (500 ตัวจริง - สแกนเร็ว 15 วิ)",
+        ["⚡ หุ้นผู้นำตลาด S&P 500 & Top Tech (500 ตัวจริงครบ A-Z - สแกนเร็ว 15 วิ)",
          "🚀 หุ้น Growth & Momentum ชั้นนำ (1,000 ตัวคัดเกรด - แนะนำ 35 วิ)",
          "🌐 หุ้น Active สภาพคล่องสูงทั้งตลาด (2,500+ หุ้น - เต็มระบบ 1 นาที)"],
         index=0,
@@ -1130,8 +1163,8 @@ with tab2:
         status_text = st.empty()
         status_text.info(UI_LANG_MAP['status_preparing_tickers'])
         
-        stock_list = get_us_stock_tickers(scope_code)
-        total_stocks = len(stock_list)
+        stock_directory = get_us_stock_directory(scope_code)
+        total_stocks = len(stock_directory)
         progress_bar = st.progress(0)
         
         results = []
@@ -1139,7 +1172,7 @@ with tab2:
 
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=40) as executor:
-                futures = {executor.submit(check_ma_snr_combo, ticker, False): ticker for ticker in stock_list}
+                futures = {executor.submit(check_ma_snr_combo, item, False): item for item in stock_directory}
                 for future in concurrent.futures.as_completed(futures):
                     count += 1
                     if count % 15 == 0 or count == total_stocks:
@@ -1163,76 +1196,139 @@ with tab2:
         server_state["last_scanned_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         if results:
             df_result_display = pd.DataFrame([item['res_data'] for item in results])[[
-                'Ticker', 'Price ($)', 'status_text', 'pattern_name', 'Support 1 ($)', 'Support 2 ($)', 'Support 3 ($)', 'RSI', 
+                'Ticker', 'Exchange', 'Price ($)', 'status_text', 'pattern_name', 'Support 1 ($)', 'Support 2 ($)', 'Support 3 ($)', 'RSI', 
                 'Resist 1 ($)', 'Resist 2 ($)', 'Resist 3 ($)', 'Resist 4 ($)', 
                 'Volume', 'Date'
             ]]
             server_state["latest_df"] = df_result_display
         st.rerun()
 
+    # ================= แสดงผลลัพธ์พร้อมระบบกรองตลาด (Filter Toolbar) =================
     if server_state["latest_results"]:
-        results = server_state["latest_results"]
-        df_result_display = server_state["latest_df"]
+        all_results = server_state["latest_results"]
+        
+        # 1. แผงสรุปยอดแยกตามตลาด (Dashboard Cards)
+        total_found = len(all_results)
+        nasdaq_count = sum(1 for item in all_results if "NASDAQ" in item['res_data'].get('Exchange', '').upper())
+        nyse_count = sum(1 for item in all_results if "NYSE" in item['res_data'].get('Exchange', '').upper())
+        amex_count = sum(1 for item in all_results if "AMEX" in item['res_data'].get('Exchange', '').upper())
+        other_count = total_found - (nasdaq_count + nyse_count + amex_count)
 
         if server_state.get("last_scanned_at"):
             elapsed_thai = get_time_elapsed_thai(server_state.get("last_scanned_dt"))
-            st.info(f"🕒 ผลการสแกนล่าสุดของเซิร์ฟเวอร์ ณ เวลา: **{server_state['last_scanned_at']}**{elapsed_thai} (ทุกคนในระบบสามารถดูร่วมกันได้ทันที)")
+            st.info(f"🕒 สแกนล่าสุด: **{server_state['last_scanned_at']}**{elapsed_thai} | ทั้งหมด **{total_found}** ตัว (💻 NASDAQ: **{nasdaq_count}** | 🏛️ NYSE: **{nyse_count}** | 🏭 AMEX: **{amex_count}**)")
 
         st.markdown("---")
+        
+        # 2. ตัวกรองอัจฉริยะ (Filter Toolbar) ให้เลือกดูเฉพาะตลาด/สถานะได้ทันที
+        col_f1, col_f2, col_f3 = st.columns([1.5, 1.5, 2])
+        with col_f1:
+            market_filter = st.selectbox(
+                "🏢 กรองตามตลาด:",
+                ["ทั้งหมด (All Exchanges)", "เฉพาะ NASDAQ", "เฉพาะ NYSE", "เฉพาะ AMEX"],
+                key="filter_market_choice"
+            )
+        with col_f2:
+            status_filter = st.selectbox(
+                "🎯 กรองตามสถานะ:",
+                ["ทั้งหมด (All Statuses)", "🚀 ขาขึ้นแข็งแกร่ง", "⏳ ย่อพักฐาน", "🎯 ช้อนแนวรับ"],
+                key="filter_status_choice"
+            )
+        with col_f3:
+            ticker_search_filter = st.text_input("🔍 ค้นหาชื่อหุ้นในผลลัพธ์:", value="", key="filter_search_ticker").strip().upper()
+
+        # กรองข้อมูลตามที่เลือกโดยไม่ต้องสแกนใหม่
+        filtered_results = []
+        for item in all_results:
+            r = item['res_data']
+            ex_val = r.get('Exchange', '').upper()
+            st_val = r.get('status_text', '')
+            sym_val = r.get('Ticker', '').upper()
+
+            # เช็กเงื่อนไขตลาด
+            if market_filter == "เฉพาะ NASDAQ" and "NASDAQ" not in ex_val: continue
+            if market_filter == "เฉพาะ NYSE" and "NYSE" not in ex_val: continue
+            if market_filter == "เฉพาะ AMEX" and "AMEX" not in ex_val: continue
+
+            # เช็กเงื่อนไขสถานะ
+            if status_filter == "🚀 ขาขึ้นแข็งแกร่ง" and "ขาขึ้น" not in st_val: continue
+            if status_filter == "⏳ ย่อพักฐาน" and "ย่อพักฐาน" not in st_val: continue
+            if status_filter == "🎯 ช้อนแนวรับ" and "ช้อนแนวรับ" not in st_val: continue
+
+            # เช็กค้นหาชื่อหุ้น
+            if ticker_search_filter and ticker_search_filter not in sym_val: continue
+
+            filtered_results.append(item)
+
+        st.caption(f"📌 แสดงผลลัพธ์ที่ตรงตามเงื่อนไข: **{len(filtered_results)}** จากทั้งหมด **{total_found}** ตัว")
+
+        # 3. แกลเลอรี่แสดงผลลัพธ์
         st.subheader('📸 แกลเลอรี่กราฟหุ้นทรงสวย (พร้อมรายละเอียดบริษัทและ AI Pattern Match)')
         
-        items_per_page = 6
-        total_pages = max(1, (len(results) + items_per_page - 1) // items_per_page)
-        page_num = st.selectbox("เลือกหน้าแสดงผลกราฟ:", range(1, int(total_pages) + 1), key="pagination_select")
-        
-        start_idx = (page_num - 1) * items_per_page
-        end_idx = start_idx + items_per_page
-        current_page_items = results[start_idx:end_idx]
+        if filtered_results:
+            items_per_page = 6
+            total_pages = max(1, (len(filtered_results) + items_per_page - 1) // items_per_page)
+            page_num = st.selectbox("เลือกหน้าแสดงผลกราฟ:", range(1, int(total_pages) + 1), key="pagination_select")
+            
+            start_idx = (page_num - 1) * items_per_page
+            end_idx = start_idx + items_per_page
+            current_page_items = filtered_results[start_idx:end_idx]
 
-        for row_idx in range(0, len(current_page_items), 2):
-            cols = st.columns(2)
-            for c_offset in range(2):
-                item_idx = row_idx + c_offset
-                if item_idx < len(current_page_items):
-                    item = current_page_items[item_idx]
-                    res_data = item['res_data']
-                    ticker_found = res_data.get('Ticker', '')
-                    raw_df_found = item.get('raw_df')
-                    status_lbl = res_data.get('status_text', '')
-                    pat_found = res_data.get('pattern_name', 'สร้างฐานสะสมกำลัง.png')
-                    pat_sc_found = res_data.get('pattern_score', 75.0)
+            for row_idx in range(0, len(current_page_items), 2):
+                cols = st.columns(2)
+                for c_offset in range(2):
+                    item_idx = row_idx + c_offset
+                    if item_idx < len(current_page_items):
+                        item = current_page_items[item_idx]
+                        res_data = item['res_data']
+                        ticker_found = res_data.get('Ticker', '')
+                        exchange_found = res_data.get('Exchange', 'US Market')
+                        raw_df_found = item.get('raw_df')
+                        status_lbl = res_data.get('status_text', '')
+                        pat_found = res_data.get('pattern_name', 'สร้างฐานสะสมกำลัง.png')
+                        pat_sc_found = res_data.get('pattern_score', 75.0)
 
-                    with cols[c_offset]:
-                        with st.container():
-                            st.markdown(f'<p style="font-size:0.92rem; font-weight:bold; color:#60A5FA; margin-bottom:0px;">🟢 {ticker_found} | {status_lbl}</p>', unsafe_allow_html=True)
-                            st.caption(f"Support 1: ${res_data.get('Support 1 ($)', 0)} | ต้าน 1: ${res_data.get('Resist 1 ($)', 0)} | RSI: {res_data.get('RSI', 0)}")
-                            
-                            if ticker_found not in st.session_state.watchlist:
-                                if st.button(f"⭐ บันทึก {ticker_found} เข้า Watchlist", key=f"btn_gal_wl_{ticker_found}_{page_num}_{item_idx}"):
-                                    st.session_state.watchlist.append(ticker_found)
-                                    st.rerun()
-                            
-                            if raw_df_found is not None:
-                                st.markdown(f'<div class="chart-header-badge">{ticker_found} | ล่าสุด: ${res_data.get("Price ($)", 0)} (RSI: {res_data.get("RSI", 0)})</div>', unsafe_allow_html=True)
-                                fig_gallery = create_ta_chart(raw_df_found, ticker_found, res_data)
-                                if fig_gallery:
-                                    st.plotly_chart(fig_gallery, use_container_width=True, config=PLOTLY_CONFIG, key=f"gallery_chart_{ticker_found}_{page_num}_{item_idx}")
+                        with cols[c_offset]:
+                            with st.container():
+                                st.markdown(f'<p style="font-size:0.92rem; font-weight:bold; color:#60A5FA; margin-bottom:0px;">🟢 {ticker_found} <span class="price-badge badge-market">🏛️ {exchange_found}</span> | {status_lbl}</p>', unsafe_allow_html=True)
+                                st.caption(f"Support 1: ${res_data.get('Support 1 ($)', 0)} | ต้าน 1: ${res_data.get('Resist 1 ($)', 0)} | RSI: {res_data.get('RSI', 0)}")
                                 
-                                st.markdown(f'<div class="pattern-box" style="font-size:0.72rem; padding:3px 6px;">🤖 AI Pattern: {pat_found} ({pat_sc_found}%)</div>', unsafe_allow_html=True)
-                            else:
-                                st.warning("ไม่พบข้อมูลกราฟ")
+                                if ticker_found not in st.session_state.watchlist:
+                                    if st.button(f"⭐ บันทึก {ticker_found} เข้า Watchlist", key=f"btn_gal_wl_{ticker_found}_{page_num}_{item_idx}"):
+                                        st.session_state.watchlist.append(ticker_found)
+                                        st.rerun()
                                 
-                            st.markdown("<br>", unsafe_allow_html=True)
+                                if raw_df_found is not None:
+                                    st.markdown(f'<div class="chart-header-badge">{ticker_found} ({exchange_found}) | ล่าสุด: ${res_data.get("Price ($)", 0)} (RSI: {res_data.get("RSI", 0)})</div>', unsafe_allow_html=True)
+                                    fig_gallery = create_ta_chart(raw_df_found, ticker_found, res_data)
+                                    if fig_gallery:
+                                        st.plotly_chart(fig_gallery, use_container_width=True, config=PLOTLY_CONFIG, key=f"gallery_chart_{ticker_found}_{page_num}_{item_idx}")
+                                    
+                                    st.markdown(f'<div class="pattern-box" style="font-size:0.72rem; padding:3px 6px;">🤖 AI Pattern: {pat_found} ({pat_sc_found}%)</div>', unsafe_allow_html=True)
+                                else:
+                                    st.warning("ไม่พบข้อมูลกราฟ")
+                                    
+                                st.markdown("<br>", unsafe_allow_html=True)
+        else:
+            st.warning("⚠️ ไม่พบหุ้นที่ตรงตามเงื่อนไขตัวกรองที่คุณเลือก ลองปรับตัวกรองเป็น 'ทั้งหมด' ครับ")
 
         st.markdown("---")
+        
+        # 4. ตารางสรุปสัญญาณราคาและปุ่มดาวน์โหลด CSV
         st.markdown("#### 📊 ตารางสรุปสัญญาณราคาหุ้นทรงสวยประจำวัน")
-        st.dataframe(df_result_display, use_container_width=True, hide_index=True, height=200)
-        st.download_button(
-            label='📥 ดาวน์โหลด Watchlist วันนี้ (CSV)',
-            data=df_result_display.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig'),
-            file_name=f'us_watchlist_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv',
-            key="btn_download_csv"
-        )
+        if filtered_results:
+            df_display_filtered = pd.DataFrame([item['res_data'] for item in filtered_results])[[
+                'Ticker', 'Exchange', 'Price ($)', 'status_text', 'pattern_name', 'Support 1 ($)', 'Support 2 ($)', 'Support 3 ($)', 'RSI', 
+                'Resist 1 ($)', 'Resist 2 ($)', 'Resist 3 ($)', 'Resist 4 ($)', 
+                'Volume', 'Date'
+            ]]
+            st.dataframe(df_display_filtered, use_container_width=True, hide_index=True, height=220)
+            st.download_button(
+                label='📥 ดาวน์โหลด Watchlist รายการที่กรอง (CSV)',
+                data=df_display_filtered.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig'),
+                file_name=f'us_watchlist_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv',
+                key="btn_download_csv"
+            )
 
 
 # --- TAB 3: Watchlist ส่วนตัว ---
@@ -1248,7 +1344,7 @@ with tab3:
         
         for w_ticker in st.session_state.watchlist:
             try:
-                df_w = fetch_stock_history_dual(w_ticker)
+                df_w, ex_w = fetch_stock_history_dual(w_ticker)
                 if df_w is not None and not df_w.empty:
                     curr_price = round(float(df_w['close'].iloc[-1]), 2)
                     prev_close = float(df_w['close'].iloc[-2]) if len(df_w) > 1 else curr_price
@@ -1256,7 +1352,7 @@ with tab3:
                     
                     st.markdown(f"""
                     <div class="fin-card">
-                        <b>📌 {w_ticker}</b> | ราคาล่าสุด: <b>${curr_price}</b> ({change:+.2f}%)
+                        <b>📌 {w_ticker}</b> <span class="price-badge badge-market">🏛️ {ex_w}</span> | ราคาล่าสุด: <b>${curr_price}</b> ({change:+.2f}%)
                     </div>
                     """, unsafe_allow_html=True)
                 else:
