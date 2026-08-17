@@ -671,38 +671,47 @@ def check_ma_snr_combo(ticker, info_mode=False):
         if drop_8d_pct > -12: bull_score += 10
         bullish_pct = min(96.0, max(5.0, round(bull_score * 0.95 + 4.0, 1)))
 
-        # 4 สภาวะตลาด
-        if drop_8d_pct <= -20.0 or (not is_above_ma20 and not is_above_ma50 and latest_rsi < 40 and drop_8d_pct <= -15.0):
+      # ================= จำแนก 4 สภาวะตลาดหลัก (สูตรใหม่ ปลดล็อกขาขึ้น) =================
+        # 1. ขาลงชัดเจน / โดนทุบหนัก (หลุดเส้นค่าเฉลี่ยทั้งคู่ หรือโดนทุบแรง)
+        if (not is_above_ma20 and not is_above_ma50 and latest_rsi < 48) or drop_8d_pct <= -18.0:
             trend_status = "DOWNTREND"
             status_text = "📉 ลงแรง / ขาลงชัดเจน (ห้ามรับมีด)"
             badge_class = "badge-trend-bear"
             badge_label = f"📉 ลงแรง/ขาลง: {100.0 - bullish_pct:.1f}%"
-            status_desc = f"⚠️ หุ้นถูกเทขายรุนแรง (ย่อตัวจากยอด 8 วัน {drop_8d_pct:.2f}%) หลุดแนวรับสำคัญและเสียทรง"
-        elif is_above_ma20 and is_above_ma50 and is_ma_bull and latest_rsi >= 50:
+            status_desc = f"⚠️ หุ้นหลุดเส้นค่าเฉลี่ยหลัก (ย่อตัวจากยอด 8 วัน {drop_8d_pct:.2f}%) โครงสร้างยังเสียเปรียบ"
+
+        # 2. ขาขึ้นแข็งแกร่ง (ยืนเหนือ MA20 & MA50 หรือยืนเหนือ MA20 พร้อมโมเมนตัม RSI)
+        elif (is_above_ma20 and is_above_ma50) or (is_above_ma20 and latest_rsi >= 48 and drop_8d_pct > -8.0):
             trend_status = "UPTREND"
             status_text = "🚀 ขาขึ้นแข็งแกร่ง (Strong Uptrend)"
             badge_class = "badge-trend-bull"
             badge_label = f"🚀 ขาขึ้นแข็งแกร่ง: {bullish_pct}%"
-            status_desc = f"✨ ราคาฟอร์มตัวยืนเหนือเส้นค่าเฉลี่ยทุกเส้น โมเมนตัมขาขึ้นสมบูรณ์ (ดีดตัวจากฐานล่าสุด +{bounce_8d_pct:.2f}%)"
-        elif is_above_ma50 and drop_8d_pct <= -6.0 and latest_rsi >= 42:
+            status_desc = f"✨ ราคายืนเหนือเส้นแนวโน้มหลัก โมเมนตัมขาขึ้นต่อเนื่อง (ดีดตัวจากฐานล่าสุด +{bounce_8d_pct:.2f}%)"
+
+        # 3. ย่อพักฐานในแนวโน้มขาขึ้น (ราคาอยู่เหนือ MA50 แต่ย่อลงมาทดสอบ)
+        elif is_above_ma50 and not is_above_ma20 and latest_rsi >= 40:
             trend_status = "PULLBACK"
             status_text = "⏳ ย่อพักฐาน (Healthy Pullback)"
             badge_class = "badge-trend-pull"
             badge_label = f"⏳ ย่อพักฐาน: {bullish_pct}%"
-            status_desc = f"🔄 หุ้นอยู่ในแนวโน้มใหญ่ขาขึ้น แต่กำลังย่อตัวพักฐานตามรอบ (ย่อจากยอด 8 วัน {drop_8d_pct:.2f}%)"
-        elif bounce_8d_pct >= 2.0 and latest_close <= s1 * 1.04:
+            status_desc = f"🔄 โครงสร้างใหญ่ยังเป็นขาขึ้น กำลังย่อตัวพักฐานตามรอบ (ย่อจากยอด 8 วัน {drop_8d_pct:.2f}%)"
+
+        # 4. ช้อนแนวรับ (มีแรงเด้งสู้ที่โซนแนวรับ)
+        elif bounce_8d_pct >= 2.0 and (latest_close <= s1 * 1.06 or latest_close <= s2 * 1.06):
             trend_status = "BUY_SUPPORT"
             status_text = f"🎯 ช้อนแนวรับ (เด้งจากฐาน +{bounce_8d_pct:.2f}%)"
             badge_class = "badge-trend-support"
             badge_label = f"🎯 ช้อนแนวรับ: {bullish_pct}%"
-            status_desc = f"🛡️ ราคาลงมาแตะโซนแนวรับสำคัญและเริ่มมีแรงดีดกลับตัว (+{bounce_8d_pct:.2f}%) เหมาะสะสมไม้ 1"
+            status_desc = f"🛡️ ราคาแตะโซนแนวรับและเริ่มมีแรงดีดกลับตัว (+{bounce_8d_pct:.2f}%) เหมาะสะสมไม้ 1"
+
+        # 5. สะสมแรง / ไซด์เวย์ (กรณีแกว่งแคบๆ อยู่ระหว่างเส้นค่าเฉลี่ย)
         else:
             trend_status = "SIDEWAYS"
             status_text = "〰️ สะสมแรง / ไซด์เวย์"
             badge_class = "badge-trend-side"
             badge_label = f"〰️ สะสมแรง/ไซด์เวย์: {bullish_pct}%"
-            status_desc = f"📦 ราคาแกว่งตัวในกรอบสร้างฐาน ยังไม่มีทิศทางชัดเจน รอการเบรกเอาท์"
-
+            status_desc = f"📦 ราคาแกว่งตัวสร้างฐานในกรอบแคบ รอเบรกเอาท์เพื่อเลือกทิศทาง"
+            
         dist_from_sup = ((latest_close - s1) / s1) * 100
         pat_name, pat_score = calculate_ai_pattern_match(df.tail(60))
         vol_val = df['volume'].iloc[-1] if 'volume' in df.columns else 0
