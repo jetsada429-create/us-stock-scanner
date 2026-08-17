@@ -1190,15 +1190,36 @@ with tab2:
         server_state["latest_results"] = results
         server_state["last_scanned_dt"] = datetime.now()
         server_state["last_scanned_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        if results:
-            df_result_display = pd.DataFrame([item['res_data'] for item in results])[[
-                'Ticker', 'longNameEn', 'Exchange', 'sectorTh', 'Price ($)', 'status_text', 'pattern_name', 'Support 1 ($)', 'Support 2 ($)', 'Support 3 ($)', 'RSI', 
-                'Resist 1 ($)', 'Resist 2 ($)', 'Resist 3 ($)', 'Resist 4 ($)', 
-                'Volume', 'Date'
-            ]]
-            server_state["latest_df"] = df_result_display
+        
+   if results:
+            # ใช้ฟังก์ชันช่วยเติมข้อมูลที่ขาดหายไปก่อนนำไปสร้างตาราง
+            processed_data = []
+            for item in results:
+                d = item['res_data']
+                # เติมค่า Default หากคีย์ใดคีย์หนึ่งหายไป
+                clean_d = {
+                    'Ticker': d.get('Ticker', 'N/A'),
+                    'longNameEn': d.get('longNameEn', 'N/A'),
+                    'Exchange': d.get('Exchange', 'US Market'),
+                    'sectorTh': d.get('sectorTh', 'N/A'),
+                    'Price ($)': d.get('Price ($)', 0),
+                    'status_text': d.get('status_text', 'N/A'),
+                    'pattern_name': d.get('pattern_name', 'N/A'),
+                    'Support 1 ($)': d.get('Support 1 ($)', 0),
+                    'Support 2 ($)': d.get('Support 2 ($)', 0),
+                    'Support 3 ($)': d.get('Support 3 ($)', 0),
+                    'RSI': d.get('RSI', 0),
+                    'Resist 1 ($)': d.get('Resist 1 ($)', 0),
+                    'Resist 2 ($)': d.get('Resist 2 ($)', 0),
+                    'Resist 3 ($)': d.get('Resist 3 ($)', 0),
+                    'Resist 4 ($)': d.get('Resist 4 ($)', 0),
+                    'Volume': d.get('Volume', '0'),
+                    'Date': d.get('Date', 'N/A')
+                }
+                processed_data.append(clean_d)
+            
+            server_state["latest_df"] = pd.DataFrame(processed_data)
         st.rerun()
-
     # ================= แสดงผลลัพธ์พร้อมระบบกรองตลาด (Filter Toolbar) =================
     if server_state["latest_results"]:
         all_results = server_state["latest_results"]
