@@ -18,14 +18,12 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ตัวแปรตั้งค่า Plotly Toolbar
 PLOTLY_CONFIG = {
     'displayModeBar': True,
     'displaylogo': False,
     'responsive': True
 }
 
-# พจนานุกรมข้อความและภาษา
 UI_LANG_MAP = {
     'search_ticker_title': "US Stock Scanner PRO (by.Jetsada)",
     'search_ticker_subtitle': "ระบบสแกนเทคนิคอล • คำนวณ % โครงสร้างราคา • AI Pattern • 3 แนวรับ 4 แนวต้าน",
@@ -135,7 +133,6 @@ st.markdown(
         transform: translateY(-1px);
     }
     
-    /* กล่องสถานะตามสี 5 สภาวะตลาด */
     .status-banner {
         border-radius: 8px;
         padding: 12px 16px;
@@ -221,7 +218,6 @@ st.markdown(
     .badge-rsi { background: #1E293B; color: #38BDF8; border: 1px solid #334155; }
     .badge-dist { background: #064E3B; color: #34D399; border: 1px solid #059669; }
     
-    /* Badges สำหรับสถานะ 5 สภาวะในแกลเลอรี่ */
     .badge-status-uptrend { background: #064E3B; color: #6EE7B7; border: 1px solid #10b981; font-weight: 700; padding: 3px 8px; border-radius: 6px; font-size: 0.78rem; }
     .badge-status-pullback { background: #451A03; color: #FCD34D; border: 1px solid #f59e0b; font-weight: 700; padding: 3px 8px; border-radius: 6px; font-size: 0.78rem; }
     .badge-status-support { background: #1E3A8A; color: #93C5FD; border: 1px solid #38bdf8; font-weight: 700; padding: 3px 8px; border-radius: 6px; font-size: 0.78rem; }
@@ -626,20 +622,47 @@ def translate_text_to_thai(text):
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_company_info_and_holders(ticker):
     try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        url = f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{ticker}?modules=assetProfile,defaultKeyStatistics"
-        r = requests.get(url, headers=headers, timeout=3.0)
-        if r.status_code == 200:
-            res_json = r.json().get('quoteSummary', {}).get('result', [{}])[0]
-            profile = res_json.get('assetProfile', {})
-            stats = res_json.get('defaultKeyStatistics', {})
+        stock = yf.Ticker(ticker, session=get_yfinance_session())
+        info = stock.info
+        if not info or len(info) < 5:
+            # ใช้ Yahoo Quote Summary API เป็นระบบสำรอง
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            url = f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{ticker}?modules=assetProfile,defaultKeyStatistics"
+            r = requests.get(url, headers=headers, timeout=3.0)
+            if r.status_code == 200:
+                res_json = r.json().get('quoteSummary', {}).get('result', [{}])[0]
+                profile = res_json.get('assetProfile', {})
+                stats = res_json.get('defaultKeyStatistics', {})
+                
+                raw_summary = profile.get('longBusinessSummary', '')
+                raw_sector = profile.get('sector', 'N/A')
+                raw_industry = profile.get('industry', 'N/A')
+                shares_out = stats.get('sharesOutstanding', {}).get('raw', 0)
+                inst_held = stats.get('heldPercentInstitutions', {}).get('raw', 0)
+                insider_held = stats.get('heldPercentInsiders', {}).get('raw', 0)
 
-            raw_summary = profile.get('longBusinessSummary', '')
-            raw_sector = profile.get('sector', 'N/A')
-            raw_industry = profile.get('industry', 'N/A')
-            shares_out = stats.get('sharesOutstanding', {}).get('raw', 0)
-            inst_held = stats.get('heldPercentInstitutions', {}).get('raw', 0)
-            insider_held = stats.get('heldPercentInsiders', {}).get('raw', 0)
+                th_summary = translate_text_to_thai(raw_summary) if raw_summary else 'N/A'
+                sector_th = SECTOR_MAP_TH.get(raw_sector, raw_sector)
+                industry_th = translate_text_to_thai(raw_industry) if raw_industry != 'N/A' else 'N/A'
+                retail_held_pct = f"{max(0.0, 100 - (inst_held + insider_held)*100):.2f}%" if inst_held or insider_held else "N/A"
+
+                return {
+                    'longNameEn': profile.get('longName', ticker),
+                    'sectorTh': sector_th,
+                    'industryTh': industry_th,
+                    'summaryTh': th_summary,
+                    'sharesOutstanding': f"{shares_out:,.0f}" if shares_out else "N/A",
+                    'institutionalHeld': f"{inst_held*100:.2f}%" if inst_held else "N/A",
+                    'insiderHeld': f"{insider_held*100:.2f}%" if insider_held else "N/A",
+                    'retailHeld': retail_held_pct
+                }
+        else:
+            raw_summary = info.get('longBusinessSummary', '')
+            raw_sector = info.get('sector', 'N/A')
+            raw_industry = info.get('industry', 'N/A')
+            shares_out = info.get('sharesOutstanding', 0)
+            inst_held = info.get('heldPercentInstitutions', 0)
+            insider_held = info.get('heldPercentInsiders', 0)
 
             th_summary = translate_text_to_thai(raw_summary) if raw_summary else 'N/A'
             sector_th = SECTOR_MAP_TH.get(raw_sector, raw_sector)
@@ -647,7 +670,7 @@ def get_company_info_and_holders(ticker):
             retail_held_pct = f"{max(0.0, 100 - (inst_held + insider_held)*100):.2f}%" if inst_held or insider_held else "N/A"
 
             return {
-                'longNameEn': ticker,
+                'longNameEn': info.get('longName', ticker),
                 'sectorTh': sector_th,
                 'industryTh': industry_th,
                 'summaryTh': th_summary,
@@ -684,6 +707,24 @@ def get_stock_news(ticker):
 @st.cache_data(ttl=14400, show_spinner=False)
 def get_financials(ticker):
     try:
+        stock = yf.Ticker(ticker, session=get_yfinance_session())
+        q_financials = stock.quarterly_financials
+        if q_financials is not None and 'Net Income' in q_financials.index:
+            net_income = q_financials.loc['Net Income'].head(3)
+            data = []
+            for date, value in net_income.items():
+                if pd.notna(value):
+                    data.append({
+                        'Quarter End': date.strftime('%Y-%m-%d'),
+                        'Net Income (M$)': round(value / 1_000_000, 2)
+                    })
+            if data:
+                return pd.DataFrame(data)
+    except Exception:
+        pass
+    
+    # ระบบสำรองดึงงบการเงินผ่าน Quote Summary API
+    try:
         url = f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{ticker}?modules=incomeStatementHistoryQuarterly"
         r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3.0)
         if r.status_code == 200:
@@ -696,7 +737,9 @@ def get_financials(ticker):
                     data.append({'Quarter End': d, 'Net Income (M$)': round(ni / 1_000_000, 2)})
             if data:
                 return pd.DataFrame(data)
-    except Exception: pass
+    except Exception:
+        pass
+        
     return None
 
 
@@ -727,7 +770,7 @@ def create_ta_chart(df, ticker, res_data):
     return fig
 
 
-# ================= 6. ฟังก์ชันวิเคราะห์หลักความเร็วสูง =================
+# ================= 6. ฟังก์ชันวิเคราะห์หลัก (มีระบบ Cache 1 ชม. ป้องกันคอขวด) =================
 @st.cache_data(ttl=3600, show_spinner=False)
 def check_ma_snr_combo(item_input, info_mode=False):
     try:
@@ -863,7 +906,7 @@ def check_ma_snr_combo(item_input, info_mode=False):
             'bounce_8d_pct': f'+{bounce_8d_pct:.2f}%'
         }
 
-        # เติมข้อมูลรายละเอียดบริษัท งบการเงิน และสรุปธุรกิจเสมอเพื่อให้ไม่แสดงเป็น N/A
+        # ดึงข้อมูลโปรไฟล์บริษัทและผู้ถือครองเสมอเพื่อไม่ให้เป็น N/A
         co_info = get_company_info_and_holders(ticker)
         if co_info:
             if co_info.get('longNameEn') and co_info['longNameEn'] != ticker:
@@ -899,7 +942,7 @@ with tab1:
 
     if search_btn and single_ticker:
         with st.spinner(UI_LANG_MAP['status_analyzing_single'].format(ticker=single_ticker)):
-            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
                 f_combo = executor.submit(check_ma_snr_combo, single_ticker, True)
                 f_profit = executor.submit(get_financials, single_ticker)
                 f_news = executor.submit(get_stock_news, single_ticker)
@@ -921,7 +964,7 @@ with tab1:
                 st.markdown(f"""
                 <div class="status-banner {box_css}">
                     <div class="status-title-text">{res.get('status_text', '')}</div>
-                    <div class="status-desc-text">{res.get('status_desc', '')} | ข้อมูล ณ วันที่: {res.get('Date', '')} (⚡ โหลดความเร็วสูง)</div>
+                    <div class="status-desc-text">{res.get('status_desc', '')} | ข้อมูล ณ วันที่: {res.get('Date', '')} (⚡ โหลดจากแคชเซิร์ฟเวอร์ 1 ชม.)</div>
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -1257,7 +1300,6 @@ with tab2:
                         pat_found = res_data.get('pattern_name', 'สร้างฐานสะสมกำลัง.png')
                         pat_sc_found = res_data.get('pattern_score', 75.0)
 
-                        # แปลง class แบนเนอร์ให้เป็น badge สีสวยงามในแกลเลอรี่
                         badge_status_class = "badge-status-sideways"
                         if "uptrend" in status_box_class_gallery: badge_status_class = "badge-status-uptrend"
                         elif "pullback" in status_box_class_gallery: badge_status_class = "badge-status-pullback"
@@ -1269,7 +1311,6 @@ with tab2:
                                 st.markdown(f'<p style="font-size:0.95rem; font-weight:bold; color:#60A5FA; margin-bottom:2px;">🟢 {ticker_found} : {company_name_found} <span class="price-badge badge-market">🏛️ {exchange_found}</span></p>', unsafe_allow_html=True)
                                 st.markdown(f'<div class="sector-badge" style="font-size:0.72rem; padding:2px 6px; margin-bottom:4px;">🏷️ {sector_found} | ย่อย: {industry_found}</div>', unsafe_allow_html=True)
                                 
-                                # แสดงป้ายสถานะมีสีสันชัดเจนตามรูปตัวอย่างที่ต้องการ
                                 st.markdown(f'<div style="margin-bottom:6px;"><span class="{badge_status_class}">{status_lbl}</span></div>', unsafe_allow_html=True)
                                 st.caption(f"Support 1: ${res_data.get('Support 1 ($)', 0)} | ต้าน 1: ${res_data.get('Resist 1 ($)', 0)} | RSI: {res_data.get('RSI', 0)}")
                                 
