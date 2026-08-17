@@ -87,6 +87,7 @@ st.markdown(
         padding-right: 0.8rem !important;
         max-width: 1200px;
     }
+    
     .main-title {
         font-size: 1.55rem !important;
         font-weight: 900 !important;
@@ -103,6 +104,7 @@ st.markdown(
         text-align: center;
         margin-bottom: 0.6rem;
     }
+    
     .stButton > button {
         width: 100% !important;
         background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
@@ -320,7 +322,7 @@ st.markdown(f'<div class="sub-title">{UI_LANG_MAP["search_ticker_subtitle"]}</di
 
 def calculate_swing_snr(df, latest_close):
     """
-    สูตรคำนวณแนวรับ-แนวต้านจาก Active Wave ปัจจุบัน (สูงสุด 120 วัน) ตัดปัญหาราคาอดีต 2 ปีก่อน
+    สูตรคำนวณแนวรับ-แนวต้านตาม Active Wave ปัจจุบัน (สูงสุด 120 วัน) ตัดปัญหาราคาอดีต 2 ปีก่อน
     """
     n = len(df)
     window_n = min(n, 120)
@@ -343,7 +345,6 @@ def calculate_swing_snr(df, latest_close):
     recent_45d_low = float(np.min(lows[-45:]))
 
     # --- กำหนดแนวรับ (Supports) ---
-    # S1: สวิงโลว์ 15 วัน หรือ Fib 0.50 ใต้ราคาปัจจุบัน
     if recent_15d_low < latest_close * 0.995 and recent_15d_low > latest_close * 0.85:
         s1 = recent_15d_low
     elif fib_500 < latest_close * 0.995 and fib_500 > latest_close * 0.88:
@@ -353,7 +354,6 @@ def calculate_swing_snr(df, latest_close):
     else:
         s1 = latest_close * 0.95
 
-    # S2: ฐานพักตัวหลักรอบก่อนหน้า (ก้นหลุมรอบ 45 วัน หรือ Fib 61.8% / 78.6%)
     if recent_45d_low < s1 * 0.96 and recent_45d_low > wave_low * 1.15:
         s2 = recent_45d_low
     elif fib_618 < s1 * 0.96:
@@ -363,7 +363,6 @@ def calculate_swing_snr(df, latest_close):
     else:
         s2 = s1 * 0.89
 
-    # S3: ฐานรับใหญ่ของรอบคลื่นปัจจุบัน
     s3 = wave_low if wave_low < s2 * 0.90 else s2 * 0.75
 
     if s2 >= s1: s2 = s1 * 0.90
@@ -807,19 +806,20 @@ with tab1:
                 company_full_name = res.get("longNameEn", single_ticker)
                 sector_desc = res.get("sectorTh", "N/A")
                 industry_desc = res.get("industryTh", "N/A")
+                t_status = res.get("trend_status", "SIDEWAYS")
 
                 st.markdown(f'<p class="company-header">{single_ticker} : {company_full_name}</p>', unsafe_allow_html=True)
                 st.markdown(f'<div class="sector-badge">🏷️ กลุ่มธุรกิจ: {sector_desc} | ย่อย: {industry_desc}</div>', unsafe_allow_html=True)
                 
                 # แสดงผลสถานะแนวโน้ม
-                if res['trend_status'] in ["UPTREND", "BUY_SUPPORT"]:
-                    st.success(f"{res['status_text']}\n\n{res['status_desc']} | ณ วันที่: {res['Date']}")
-                elif res['trend_status'] == "PULLBACK":
-                    st.warning(f"{res['status_text']}\n\n{res['status_desc']} | ณ วันที่: {res['Date']}")
-                elif res['trend_status'] == "SIDEWAYS":
-                    st.info(f"{res['status_text']}\n\n{res['status_desc']} | ณ วันที่: {res['Date']}")
+                if t_status in ["UPTREND", "BUY_SUPPORT"]:
+                    st.success(f"{res.get('status_text', '')}\n\n{res.get('status_desc', '')} | ณ วันที่: {res.get('Date', '')}")
+                elif t_status == "PULLBACK":
+                    st.warning(f"{res.get('status_text', '')}\n\n{res.get('status_desc', '')} | ณ วันที่: {res.get('Date', '')}")
+                elif t_status == "SIDEWAYS":
+                    st.info(f"{res.get('status_text', '')}\n\n{res.get('status_desc', '')} | ณ วันที่: {res.get('Date', '')}")
                 else:
-                    st.error(f"{res['status_text']}\n\n{res['status_desc']} | ณ วันที่: {res['Date']}")
+                    st.error(f"{res.get('status_text', '')}\n\n{res.get('status_desc', '')} | ณ วันที่: {res.get('Date', '')}")
 
                 # ปุ่ม Watchlist
                 if single_ticker not in st.session_state.watchlist:
@@ -836,7 +836,7 @@ with tab1:
                 # กราฟแท่งเทียน
                 if raw_df is not None:
                     st.markdown(f"#### {UI_LANG_MAP['chart_title_single']}")
-                    st.markdown(f'<div class="chart-header-badge">{single_ticker} | ล่าสุด: ${res["Price ($)"]} (RSI: {res.get("RSI", 0)})</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="chart-header-badge">{single_ticker} | ล่าสุด: ${res.get("Price ($)", 0)} (RSI: {res.get("RSI", 0)})</div>', unsafe_allow_html=True)
                     fig = create_ta_chart(raw_df, single_ticker, res)
                     if fig:
                         st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG, key=f"chart_single_{single_ticker}")
@@ -846,33 +846,38 @@ with tab1:
                 # กล่อง Compact Board (แสดงราคา + สถานะตลาด + AI Pattern Match ชัดเจน)
                 st.markdown(f"#### {UI_LANG_MAP['analysis_title']}")
                 
+                badge_class = res.get('badge_class', 'badge-trend-side')
+                badge_label = res.get('badge_label', '〰️ สะสมแรง')
+                pat_name = res.get('pattern_name', 'สร้างฐานสะสมกำลัง.png')
+                pat_score = res.get('pattern_score', 75.0)
+
                 st.markdown(f"""
                 <div class="compact-board">
                     <div class="price-banner">
                         <div class="price-val-box">
                             <span style="font-size:0.8rem; color:#94A3B8; font-weight:600;">💰 ราคา:</span>
-                            <span class="price-main">${res['Price ($)']}</span>
+                            <span class="price-main">${res.get('Price ($)', 0)}</span>
                         </div>
                         <div class="price-badge-group">
-                            <span class="price-badge {res['badge_class']}">{res['badge_label']}</span>
-                            <span class="price-badge badge-ai-box">🤖 AI Pattern: {res['pattern_name']} ({res['pattern_score']}%)</span>
-                            <span class="price-badge badge-rsi">RSI: {res['RSI']}</span>
-                            <span class="price-badge badge-dist">ห่างรับ 1: {res['Dist_Sup (%)']}</span>
+                            <span class="price-badge {badge_class}">{badge_label}</span>
+                            <span class="price-badge badge-ai-box">🤖 AI Pattern: {pat_name} ({pat_score}%)</span>
+                            <span class="price-badge badge-rsi">RSI: {res.get('RSI', 0)}</span>
+                            <span class="price-badge badge-dist">ห่างรับ 1: {res.get('Dist_Sup (%)', '0%')}</span>
                         </div>
                     </div>
                     <div class="snr-grid">
                         <div class="snr-card" style="border-left: 3px solid #22C55E;">
                             <div class="snr-card-title c-green">🛡️ แนวรับ (Support)</div>
-                            <div class="snr-row"><span class="snr-lbl">รับ 1 (สวิงใกล้สุด)</span><span class="snr-num c-green">${res['Support 1 ($)']}</span></div>
-                            <div class="snr-row"><span class="snr-lbl">รับ 2 (ฐานหลัก)</span><span class="snr-num c-lightgreen">${res['Support 2 ($)']}</span></div>
-                            <div class="snr-row"><span class="snr-lbl">รับ 3 (โครงสร้างใหญ่)</span><span class="snr-num c-lightgreen">${res['Support 3 ($)']}</span></div>
+                            <div class="snr-row"><span class="snr-lbl">รับ 1 (สวิงใกล้สุด)</span><span class="snr-num c-green">${res.get('Support 1 ($)', 0)}</span></div>
+                            <div class="snr-row"><span class="snr-lbl">รับ 2 (ฐานหลัก)</span><span class="snr-num c-lightgreen">${res.get('Support 2 ($)', 0)}</span></div>
+                            <div class="snr-row"><span class="snr-lbl">รับ 3 (โครงสร้างใหญ่)</span><span class="snr-num c-lightgreen">${res.get('Support 3 ($)', 0)}</span></div>
                         </div>
                         <div class="snr-card" style="border-left: 3px solid #EF4444;">
                             <div class="snr-card-title c-red">⚡ แนวต้าน (Resistance)</div>
-                            <div class="snr-row"><span class="snr-lbl">ต้าน 1</span><span class="snr-num c-red">${res['Resist 1 ($)']}</span></div>
-                            <div class="snr-row"><span class="snr-lbl">ต้าน 2</span><span class="snr-num c-orange">${res['Resist 2 ($)']}</span></div>
-                            <div class="snr-row"><span class="snr-lbl">ต้าน 3</span><span class="snr-num c-yellow">${res['Resist 3 ($)']}</span></div>
-                            <div class="snr-row"><span class="snr-lbl">ต้าน 4 (สูงสุด)</span><span class="snr-num c-darkred">${res['Resist 4 ($)']}</span></div>
+                            <div class="snr-row"><span class="snr-lbl">ต้าน 1</span><span class="snr-num c-red">${res.get('Resist 1 ($)', 0)}</span></div>
+                            <div class="snr-row"><span class="snr-lbl">ต้าน 2</span><span class="snr-num c-orange">${res.get('Resist 2 ($)', 0)}</span></div>
+                            <div class="snr-row"><span class="snr-lbl">ต้าน 3</span><span class="snr-num c-yellow">${res.get('Resist 3 ($)', 0)}</span></div>
+                            <div class="snr-row"><span class="snr-lbl">ต้าน 4 (สูงสุด)</span><span class="snr-num c-darkred">${res.get('Resist 4 ($)', 0)}</span></div>
                         </div>
                     </div>
                 </div>
@@ -881,9 +886,10 @@ with tab1:
                 # การ์ดกลยุทธ์แนวรับแนวตั้ง
                 st.markdown("#### 🎯 กลยุทธ์แบ่งไม้เข้าซื้อ & ประเมินความแข็งแรงของแนวรับ")
                 
-                dist_s1 = ((res['Support 1 ($)'] - res['Price ($)']) / res['Price ($)']) * 100
-                dist_s2 = ((res['Support 2 ($)'] - res['Price ($)']) / res['Price ($)']) * 100
-                dist_s3 = ((res['Support 3 ($)'] - res['Price ($)']) / res['Price ($)']) * 100
+                curr_p = res.get('Price ($)', 1.0)
+                dist_s1 = ((res.get('Support 1 ($)', 0) - curr_p) / curr_p) * 100
+                dist_s2 = ((res.get('Support 2 ($)', 0) - curr_p) / curr_p) * 100
+                dist_s3 = ((res.get('Support 3 ($)', 0) - curr_p) / curr_p) * 100
 
                 st.markdown(f"""
                 <div class="strategy-card" style="border-left: 4px solid #22C55E;">
@@ -892,7 +898,7 @@ with tab1:
                             <span class="strat-title">🛡️ แนวรับ 1 (สวิงโลว์ใกล้สุด)</span>
                             <span style="font-size:0.75rem; color:#94A3B8; margin-left:6px;">({dist_s1:+.2f}%)</span>
                         </div>
-                        <span class="strat-price" style="color:#22C55E;">${res['Support 1 ($)']}</span>
+                        <span class="strat-price" style="color:#22C55E;">${res.get('Support 1 ($)', 0)}</span>
                     </div>
                     <div class="strat-body">
                         <div><span class="strat-sub">ความแข็งแรง:</span> <span class="strat-val">⭐⭐ ปานกลาง</span></div>
@@ -906,7 +912,7 @@ with tab1:
                             <span class="strat-title">🛡️ แนวรับ 2 (ฐานสะสมหลัก)</span>
                             <span style="font-size:0.75rem; color:#94A3B8; margin-left:6px;">({dist_s2:+.2f}%)</span>
                         </div>
-                        <span class="strat-price" style="color:#4ADE80;">${res['Support 2 ($)']}</span>
+                        <span class="strat-price" style="color:#4ADE80;">${res.get('Support 2 ($)', 0)}</span>
                     </div>
                     <div class="strat-body">
                         <div><span class="strat-sub">ความแข็งแรง:</span> <span class="strat-val">⭐⭐⭐⭐ แข็งแกร่ง</span></div>
@@ -920,7 +926,7 @@ with tab1:
                             <span class="strat-title">🛡️ แนวรับ 3 (ฐานโครงสร้างใหญ่)</span>
                             <span style="font-size:0.75rem; color:#94A3B8; margin-left:6px;">({dist_s3:+.2f}%)</span>
                         </div>
-                        <span class="strat-price" style="color:#86EFAC;">${res['Support 3 ($)']}</span>
+                        <span class="strat-price" style="color:#86EFAC;">${res.get('Support 3 ($)', 0)}</span>
                     </div>
                     <div class="strat-body">
                         <div><span class="strat-sub">ความแข็งแรง:</span> <span class="strat-val">⭐⭐⭐⭐⭐ แข็งแกร่งมาก</span></div>
@@ -1092,13 +1098,16 @@ with tab2:
                 if item_idx < len(current_page_items):
                     item = current_page_items[item_idx]
                     res_data = item['res_data']
-                    ticker_found = res_data['Ticker']
+                    ticker_found = res_data.get('Ticker', '')
                     raw_df_found = item.get('raw_df')
+                    status_lbl = res_data.get('status_text', '')
+                    pat_found = res_data.get('pattern_name', 'สร้างฐานสะสมกำลัง.png')
+                    pat_sc_found = res_data.get('pattern_score', 75.0)
 
                     with cols[c_offset]:
                         with st.container():
-                            st.markdown(f'<p style="font-size:0.92rem; font-weight:bold; color:#60A5FA; margin-bottom:0px;">🟢 {ticker_found} | {res_data["status_text"]}</p>', unsafe_allow_html=True)
-                            st.caption(f"Support 1: ${res_data['Support 1 ($)']} | ต้าน 1: ${res_data['Resist 1 ($)']} | RSI: {res_data['RSI']}")
+                            st.markdown(f'<p style="font-size:0.92rem; font-weight:bold; color:#60A5FA; margin-bottom:0px;">🟢 {ticker_found} | {status_lbl}</p>', unsafe_allow_html=True)
+                            st.caption(f"Support 1: ${res_data.get('Support 1 ($)', 0)} | ต้าน 1: ${res_data.get('Resist 1 ($)', 0)} | RSI: {res_data.get('RSI', 0)}")
                             
                             if ticker_found not in st.session_state.watchlist:
                                 if st.button(f"⭐ บันทึก {ticker_found} เข้า Watchlist", key=f"btn_gal_wl_{ticker_found}_{page_num}_{item_idx}"):
@@ -1106,12 +1115,12 @@ with tab2:
                                     st.rerun()
                             
                             if raw_df_found is not None:
-                                st.markdown(f'<div class="chart-header-badge">{ticker_found} | ล่าสุด: ${res_data["Price ($)"]} (RSI: {res_data.get("RSI", 0)})</div>', unsafe_allow_html=True)
+                                st.markdown(f'<div class="chart-header-badge">{ticker_found} | ล่าสุด: ${res_data.get("Price ($)", 0)} (RSI: {res_data.get("RSI", 0)})</div>', unsafe_allow_html=True)
                                 fig_gallery = create_ta_chart(raw_df_found, ticker_found, res_data)
                                 if fig_gallery:
                                     st.plotly_chart(fig_gallery, use_container_width=True, config=PLOTLY_CONFIG, key=f"gallery_chart_{ticker_found}_{page_num}_{item_idx}")
                                 
-                                st.markdown(f'<div class="pattern-box" style="font-size:0.72rem; padding:3px 6px;">🤖 AI Pattern: {res_data["pattern_name"]} ({res_data["pattern_score"]}%)</div>', unsafe_allow_html=True)
+                                st.markdown(f'<div class="pattern-box" style="font-size:0.72rem; padding:3px 6px;">🤖 AI Pattern: {pat_found} ({pat_sc_found}%)</div>', unsafe_allow_html=True)
                             else:
                                 st.warning("ไม่พบข้อมูลกราฟ")
                                 
