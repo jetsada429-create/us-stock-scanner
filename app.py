@@ -32,7 +32,7 @@ UI_LANG_MAP = {
     'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB, AAOI, RXT, CRWV, BZAI):",
     'btn_analyze_single': "🔎 วิเคราะห์ทันที",
     'btn_scan_market': "🚀 เริ่มสแกนตลาด",
-    'status_preparing_tickers': "⏳ กำลังดึงรายชื่อหุ้นทั้งหมดจาก SEC, NASDAQ, NYSE, AMEX...",
+    'status_preparing_tickers': "⏳ กำลังดึงรายชื่อหุ้นผู้นำตลาด (S&P 500, NASDAQ 100, Growth)...",
     'status_scanning': "⏳ สแกนไปแล้ว {count}/{total} ตัว (พบหุ้นทรงสวย {found} ตัว)...",
     'status_analyzing_single': "⏳ กำลังดึงข้อมูลสดและวิเคราะห์ {ticker}...",
     'expander_business_summary': "📖 สรุปธุรกิจ & โครงสร้างผู้ถือหุ้น (แปลไทยอัตโนมัติ)",
@@ -73,6 +73,7 @@ def get_yfinance_session():
 def get_global_server_state():
     return {
         "is_scanning": False,
+        "scan_start_time": None,
         "latest_results": None,
         "latest_df": None,
         "last_scanned_at": None,
@@ -369,80 +370,87 @@ st.markdown(
 st.markdown(f'<div class="main-title">{UI_LANG_MAP["search_ticker_title"]}</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="sub-title">{UI_LANG_MAP["search_ticker_subtitle"]}</div>', unsafe_allow_html=True)
 
-# ================= 4. ระบบดึงรายชื่อหุ้นสหรัฐฯ 3 แหล่ง (SEC + GitHub + Top Fallback) =================
+# ================= 4. ระบบดึงรายชื่อหุ้น S&P 500, NASDAQ 100 และ Growth ตัวจริง =================
 @st.cache_data(ttl=86400)
-def get_us_stock_tickers(scope="ALL"):
+def get_us_stock_tickers(scope="TOP500"):
     tickers = []
     
-    # แหล่งที่ 1: ดึงรายชื่ออย่างเป็นทางการจาก US SEC EDGAR API (10,000+ หุ้น)
+    # 1. ดึง S&P 500 ตัวจริงจาก Wikipedia (ครบทุกหมวดตัวอักษร A-Z)
     try:
-        sec_url = "https://www.sec.gov/files/company_tickers.json"
-        headers = {'User-Agent': 'USStockScannerApp/2.0 (admin@stockscannerpro.org)'}
-        r = requests.get(sec_url, headers=headers, timeout=6)
-        if r.status_code == 200:
-            data = r.json()
-            for item in data.values():
-                t = str(item.get('ticker', '')).strip().upper()
-                if t and t.isalpha() and len(t) <= 5:
-                    tickers.append(t)
+        url_sp500 = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+        tables = pd.read_html(url_sp500)
+        sp500_df = tables[0]
+        sp500_tickers = sp500_df['Symbol'].str.replace('.', '-', regex=False).tolist()
+        tickers.extend(sp500_tickers)
     except Exception:
         pass
 
-    # แหล่งที่ 2: ดึงจาก GitHub Ticker Mirror (~6,000+ หุ้น)
-    if len(tickers) < 500:
+    # 2. ดึง NASDAQ 100 ตัวจริง
+    try:
+        url_nasdaq = "https://en.wikipedia.org/wiki/Nasdaq-100"
+        tables_nd = pd.read_html(url_nasdaq)
+        # ตารางรายชื่อ NASDAQ 100 มักเป็นตารางที่ 4 หรือ 5
+        for t in tables_nd:
+            if 'Ticker' in t.columns:
+                tickers.extend(t['Ticker'].str.replace('.', '-', regex=False).tolist())
+                break
+            elif 'Symbol' in t.columns:
+                tickers.extend(t['Symbol'].str.replace('.', '-', regex=False).tolist())
+                break
+    except Exception:
+        pass
+
+    # 3. หุ้น Growth & Momentum ยอดนิยมที่ต้องมีเสมอ
+    top_growth_stocks = [
+        'NVDA', 'PLTR', 'TSLA', 'AMD', 'ARM', 'SMCI', 'RKLB', 'AAOI', 'CRWV', 'RXT', 'BZAI',
+        'SOFI', 'MARA', 'RIOT', 'COIN', 'HOOD', 'MSTR', 'DKNG', 'HIMS', 'APP', 'ASTS', 'RDDT',
+        'AFRM', 'IREN', 'WULF', 'CIFR', 'CLSK', 'IONQ', 'RGTI', 'QBTS', 'SOUN', 'BBAI', 'AI',
+        'PATH', 'SNOW', 'MDB', 'DDOG', 'ZS', 'NET', 'CRWD', 'PANW', 'FTNT', 'OKTA', 'AVGO',
+        'MRVL', 'ON', 'MPWR', 'ALAB', 'VRT', 'POWI', 'AMAT', 'LRCX', 'KLAC', 'ASML', 'TSM'
+    ]
+    tickers.extend(top_growth_stocks)
+
+    # 4. หากเลือกสแกนทั้งหมด (ALL) ดึงจาก SEC API เพิ่มเติม
+    if scope == "ALL":
         try:
-            gh_url = "https://raw.githubusercontent.com/rreichel3/US-Stock-Symbols/main/all/all_tickers.txt"
-            r = requests.get(gh_url, timeout=6)
+            sec_url = "https://www.sec.gov/files/company_tickers.json"
+            headers = {'User-Agent': 'USStockScannerApp/2.0 (admin@stockscannerpro.org)'}
+            r = requests.get(sec_url, headers=headers, timeout=5)
             if r.status_code == 200:
-                for line in r.text.splitlines():
-                    t = line.strip().upper()
+                data = r.json()
+                for item in data.values():
+                    t = str(item.get('ticker', '')).strip().upper().replace('.', '-')
                     if t and t.isalpha() and len(t) <= 5:
                         tickers.append(t)
         except Exception:
             pass
 
-    # แหล่งที่ 3: รายชื่อหุ้นหลักยอดนิยมบรรจุไว้ล่วงหน้า (200+ หุ้น)
-    if not tickers:
-        tickers = [
-            'AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA', 'BRK-B', 'AVGO', 'JPM',
-            'LLY', 'V', 'UNH', 'XOM', 'MA', 'COST', 'HD', 'PG', 'JNJ', 'ABBV', 'WMT', 'BAC',
-            'NFLX', 'CRM', 'ORCL', 'CVX', 'KO', 'MRK', 'AMD', 'ADBE', 'PEP', 'TMO', 'ACN',
-            'LIN', 'MCD', 'CSCO', 'ABT', 'WFC', 'QCOM', 'TXN', 'DHR', 'INTU', 'GE', 'AMAT',
-            'CAT', 'VZ', 'DIS', 'PM', 'NOW', 'IBM', 'AMGN', 'ISRG', 'PFE', 'UBER', 'SPGI',
-            'LOW', 'BKNG', 'GS', 'MS', 'RTX', 'HON', 'COP', 'UNP', 'T', 'AXP', 'SYK', 'BLK',
-            'VRTX', 'DE', 'LRCX', 'TJX', 'PGR', 'REGN', 'ETN', 'PANW', 'C', 'CI', 'BSX',
-            'MDLZ', 'ADI', 'CB', 'MMC', 'BA', 'FI', 'MU', 'ELV', 'PLD', 'SNPS', 'KLAC',
-            'CDNS', 'SHW', 'WM', 'ITW', 'EOG', 'CRWD', 'ICE', 'MCK', 'MAR', 'ORLY', 'MCO',
-            'PH', 'TDG', 'APH', 'CTAS', 'NXPI', 'EMR', 'BDX', 'GD', 'ROP', 'CSX', 'AON',
-            'ECL', 'PCAR', 'CMG', 'HLT', 'FDX', 'COF', 'RCL', 'NSC', 'FCX', 'TRV', 'ADSK',
-            'AZO', 'APD', 'AJG', 'NOC', 'CARR', 'GILD', 'PSX', 'TGT', 'OXY', 'MPC', 'ANET',
-            'SBUX', 'MET', 'AIG', 'ALL', 'AFL', 'PRU', 'TRGP', 'WMB', 'KMI', 'OKE', 'AAOI',
-            'CRWV', 'BZAI', 'RXT', 'RKLB', 'IREN', 'PLTR', 'SOFI', 'MARA', 'RIOT', 'SMCI',
-            'HIMS', 'APP', 'ASTS', 'RDDT', 'AFRM', 'COIN', 'HOOD', 'MSTR', 'DKNG', 'ARM'
-        ]
+    # กรอง Ticker ซ้ำและทำความสะอาด
+    clean_tickers = []
+    seen = set()
+    for t in tickers:
+        t_clean = str(t).strip().upper()
+        if t_clean and t_clean not in seen and len(t_clean) <= 6:
+            clean_tickers.append(t_clean)
+            seen.add(t_clean)
 
-    clean_tickers = sorted(list(set(tickers)))
-    
     if scope == "TOP500":
         return clean_tickers[:500]
-    elif scope == "GROWTH1500":
-        return clean_tickers[:1500]
-    return clean_tickers
+    elif scope == "GROWTH1000":
+        return clean_tickers[:1000]
+    return clean_tickers[:2500] # สแกนชุดสภาพคล่องสูง 2,500 ตัวเพื่อความเร็วและไม่โดนบล็อก
 
 # ================= 5. ฟังก์ชันดึงประวัติราคา Dual-Engine =================
 def fetch_stock_history_dual(ticker):
-    """
-    ดึงข้อมูล 6 เดือน (Active Wave) ผ่าน Direct Yahoo API v8 ก่อน แล้วสำรองด้วย yfinance
-    """
     ticker_clean = str(ticker).strip().upper()
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
     }
 
-    # 1. Direct Yahoo API v8 (เร็ว เสถียร ไม่ติด Crumb Lock)
+    # 1. Direct Yahoo API v8
     try:
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker_clean}?range=6mo&interval=1d"
-        res = requests.get(url, headers=headers, timeout=5)
+        res = requests.get(url, headers=headers, timeout=4)
         if res.status_code == 200:
             data = res.json()
             result = data.get('chart', {}).get('result', [])
@@ -480,9 +488,6 @@ def fetch_stock_history_dual(ticker):
 
 
 def calculate_swing_snr(df, latest_close):
-    """
-    สูตรคำนวณแนวรับ-แนวต้านตาม Active Wave ปัจจุบัน (สูงสุด 120 วัน)
-    """
     n = len(df)
     window_n = min(n, 120)
     df_wave = df.iloc[-window_n:]
@@ -502,7 +507,7 @@ def calculate_swing_snr(df, latest_close):
     recent_15d_low = float(np.min(lows[-15:]))
     recent_45d_low = float(np.min(lows[-45:]))
 
-    # --- กำหนดแนวรับ ---
+    # กำหนดแนวรับ
     if recent_15d_low < latest_close * 0.995 and recent_15d_low > latest_close * 0.85:
         s1 = recent_15d_low
     elif fib_500 < latest_close * 0.995 and fib_500 > latest_close * 0.88:
@@ -524,7 +529,7 @@ def calculate_swing_snr(df, latest_close):
     if s2 >= s1: s2 = s1 * 0.90
     if s3 >= s2: s3 = s2 * 0.75
 
-    # --- กำหนดแนวต้าน ---
+    # กำหนดแนวต้าน
     r4 = wave_high
     cand_resists = [fib_500, fib_382, fib_236]
     valid_resists = sorted([r for r in cand_resists if r > latest_close * 1.015 and r < r4 * 0.985])
@@ -547,9 +552,6 @@ def calculate_swing_snr(df, latest_close):
 
 
 def calculate_ai_pattern_match(df):
-    """
-    วิเคราะห์รูปทรงกราฟเทียบกับ 5 แพทเทิร์นมาตรฐาน (ใช้ 25 แท่งเทียนล่าสุด)
-    """
     try:
         if df is None or len(df) < 15:
             return "สร้างฐานสะสมกำลัง.png", 75.0
@@ -603,7 +605,7 @@ def translate_text_to_thai(text):
     try:
         url = "https://translate.googleapis.com/translate_a/single"
         params = {"client": "gtx", "sl": "en", "tl": "th", "dt": "t", "q": text}
-        res = requests.get(url, params=params, timeout=4)
+        res = requests.get(url, params=params, timeout=3)
         if res.status_code == 200:
             return "".join([item[0] for item in res.json()[0] if item[0]])
     except Exception: pass
@@ -659,7 +661,7 @@ def get_stock_news(ticker):
     if not results:
         try:
             rss_url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}&region=US&lang=en-US"
-            res = requests.get(rss_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
+            res = requests.get(rss_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=4)
             if res.status_code == 200:
                 root = ET.fromstring(res.content)
                 for item in root.findall('./channel/item')[:3]:
@@ -678,8 +680,7 @@ def get_stock_news(ticker):
 @st.cache_data(ttl=14400)
 def get_financials(ticker):
     try:
-        stock = yf.Ticker(ticker, session=get_yfinance_session())
-        q_financials = stock.quarterly_financials
+        stock = yf.Ticker(ticker, session=get_yfinance_session()).quarterly_financials
         if q_financials is not None and 'Net Income' in q_financials.index:
             net_income = q_financials.loc['Net Income'].head(3)
             data = []
@@ -867,7 +868,7 @@ tab1, tab2, tab3 = st.tabs([UI_LANG_MAP['tab_search_ticker'], UI_LANG_MAP['tab_s
 with tab1:
     col_in1, col_in2 = st.columns([3, 1])
     with col_in1:
-        single_ticker = st.text_input(UI_LANG_MAP['search_ticker_label'], value='AAOI').strip().upper()
+        single_ticker = st.text_input(UI_LANG_MAP['search_ticker_label'], value='CRWV').strip().upper()
     with col_in2:
         st.markdown("<div class='desktop-only-space'></div>", unsafe_allow_html=True)
         search_btn = st.button(UI_LANG_MAP['btn_analyze_single'])
@@ -1083,17 +1084,24 @@ with tab1:
 with tab2:
     st.markdown("### 🚀 สแกนหาหุ้นทรงสวยประจำวัน (NASDAQ, NYSE, AMEX)")
     
+    # ระบบ Auto-Unlock ป้องกันสถานะค้างเกิน 2 นาที
+    if server_state["is_scanning"] and server_state.get("scan_start_time"):
+        elapsed_scan = (datetime.now() - server_state["scan_start_time"]).total_seconds()
+        if elapsed_scan > 120:
+            server_state["is_scanning"] = False
+            server_state["scan_start_time"] = None
+
     # เมนูเลือกขอบเขตการสแกน
     scan_scope = st.radio(
         "🎯 เลือกขอบเขตและจำนวนหุ้นที่จะสแกน:",
-        ["⚡ หุ้นพิมพ์นิยม & Big Cap S&P500 (500 ตัว - เร็วสุด 20 วิ)",
-         "🚀 หุ้น Growth & Momentum ชั้นนำ (1,500 ตัว - แนะนำ 1 นาที)",
-         "🌐 สแกนทั้ง 3 ตลาดทั้งหมด (6,000+ หุ้น - เต็มระบบ 2-3 นาที)"],
-        index=1,
+        ["⚡ หุ้นผู้นำตลาด S&P 500 & Top Tech (500 ตัวจริง - สแกนเร็ว 15 วิ)",
+         "🚀 หุ้น Growth & Momentum ชั้นนำ (1,000 ตัวคัดเกรด - แนะนำ 35 วิ)",
+         "🌐 หุ้น Active สภาพคล่องสูงทั้งตลาด (2,500+ หุ้น - เต็มระบบ 1 นาที)"],
+        index=0,
         horizontal=True
     )
     
-    scope_code = "TOP500" if "500" in scan_scope else ("GROWTH1500" if "1,500" in scan_scope else "ALL")
+    scope_code = "TOP500" if "500" in scan_scope else ("GROWTH1000" if "1,000" in scan_scope else "ALL")
     
     is_busy = server_state["is_scanning"]
     
@@ -1101,21 +1109,24 @@ with tab2:
     with col_btn1:
         scan_btn = st.button(UI_LANG_MAP['btn_scan_market'], disabled=is_busy, key="btn_scan_all")
     with col_btn2:
-        reset_btn = st.button("🔄 รีเซ็ตข้อมูลสแกน", disabled=is_busy, key="btn_reset_all")
+        reset_btn = st.button("🔄 ปลดล็อก & รีเซ็ตระบบ", key="btn_reset_all")
 
     if is_busy:
-        st.warning("⏳ **ขณะนี้มีผู้ใช้งานท่านอื่นกำลังสแกนทั้งตลาดอยู่** ระบบกำลังประมวลผลให้ส่วนกลาง กรุณารอประมาณ 1-2 นาที จากนั้นผลลัพธ์จะแสดงขึ้นมาโดยอัตโนมัติครับ")
+        st.warning("⏳ **ระบบกำลังประมวลผลการสแกนอยู่** กรุณารอสักครู่ (หากค้างสามารถกดปุ่ม 'ปลดล็อก & รีเซ็ตระบบ' ได้ทันที)")
 
-    if reset_btn and not is_busy:
+    if reset_btn:
+        server_state["is_scanning"] = False
+        server_state["scan_start_time"] = None
         server_state["latest_results"] = None
         server_state["latest_df"] = None
         server_state["last_scanned_at"] = None
         server_state["last_scanned_dt"] = None
-        st.success("ล้างข้อมูลการสแกนส่วนกลางเรียบร้อยแล้ว")
+        st.success("ปลดล็อกและล้างข้อมูลเรียบร้อยแล้ว")
         st.rerun()
 
     if scan_btn and not is_busy:
         server_state["is_scanning"] = True
+        server_state["scan_start_time"] = datetime.now()
         status_text = st.empty()
         status_text.info(UI_LANG_MAP['status_preparing_tickers'])
         
@@ -1127,7 +1138,7 @@ with tab2:
         count = 0
 
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=35) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=40) as executor:
                 futures = {executor.submit(check_ma_snr_combo, ticker, False): ticker for ticker in stock_list}
                 for future in concurrent.futures.as_completed(futures):
                     count += 1
@@ -1142,6 +1153,7 @@ with tab2:
                         pass
         finally:
             server_state["is_scanning"] = False
+            server_state["scan_start_time"] = None
 
         status_text.empty()
         st.success(f'✅ สแกนเสร็จสิ้นจากทั้งหมด {total_stocks:,} ตัว! พบหุ้นทรงสวยเข้าเกณฑ์ {len(results)} ตัว')
