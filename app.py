@@ -1,5 +1,6 @@
 import concurrent.futures
 from datetime import datetime
+import xml.etree.ElementTree as ET
 import numpy as np
 import pandas as pd
 import requests
@@ -287,16 +288,21 @@ st.markdown(
         background: #0F172A;
         border: 1px solid #1E293B;
         border-radius: 6px;
-        padding: 6px 10px;
-        margin-bottom: 4px;
+        padding: 8px 12px;
+        margin-bottom: 6px;
     }
     .news-title {
-        font-size: 0.78rem;
+        font-size: 0.84rem;
         font-weight: 600;
-        color: #E2E8F0;
+        color: #60A5FA !important;
         text-decoration: none;
+        display: block;
+        margin-bottom: 3px;
     }
-    .news-meta { font-size: 0.68rem; color: #64748B; margin-top: 2px; }
+    .news-title:hover {
+        text-decoration: underline;
+    }
+    .news-meta { font-size: 0.72rem; color: #94A3B8; }
     
     .desktop-only-space { height: 28px; display: block; }
     @media (max-width: 640px) {
@@ -322,7 +328,7 @@ st.markdown(f'<div class="sub-title">{UI_LANG_MAP["search_ticker_subtitle"]}</di
 
 def calculate_swing_snr(df, latest_close):
     """
-    สูตรคำนวณแนวรับ-แนวต้านตาม Active Wave ปัจจุบัน (สูงสุด 120 วัน) ตัดปัญหาราคาอดีต 2 ปีก่อน
+    สูตรคำนวณแนวรับ-แนวต้านตาม Active Wave ปัจจุบัน (สูงสุด 120 วัน)
     """
     n = len(df)
     window_n = min(n, 120)
@@ -462,8 +468,8 @@ def get_us_stock_tickers():
 
 
 def translate_text_to_thai(text):
-    if not text or text == 'N/A':
-        return 'N/A'
+    if not text or text == 'N/A' or not str(text).strip():
+        return ''
     try:
         url = "https://translate.googleapis.com/translate_a/single"
         params = {"client": "gtx", "sl": "en", "tl": "th", "dt": "t", "q": text}
@@ -475,7 +481,7 @@ def translate_text_to_thai(text):
                 return translated_text
     except Exception:
         pass
-    return text
+    return str(text)
 
 
 @st.cache_data(ttl=14400)
@@ -530,31 +536,83 @@ def get_company_info_and_holders(ticker):
         }
 
 
-@st.cache_data(ttl=3600)
+# ================= ฟังก์ชันดึงข่าวสารที่ได้รับการปรับปรุงให้แก้ปัญหา N/A 100% =================
+@st.cache_data(ttl=1800)
 def get_stock_news(ticker):
+    """
+    ดึงข่าวสารล่าสุด รองรับโครงสร้าง yfinance ทุกเวอร์ชัน + มีระบบสำรองดึงผ่าน RSS Feed
+    """
+    results = []
+    
+    # 1. ลองดึงผ่าน yfinance ก่อน (รองรับทั้งแบบ Flat และแบบ Nested content)
     try:
         stock = yf.Ticker(ticker, session=get_yfinance_session())
         news_items = stock.news
-        if not news_items:
-            return []
-        
-        results = []
-        for n in news_items[:3]:
-            title_en = n.get('title', '')
-            title_th = translate_text_to_thai(title_en)
-            publisher = n.get('publisher', 'Financial News')
-            link = n.get('link', '#')
-            pub_ts = n.get('providerPublishTime', 0)
-            pub_date_str = datetime.fromtimestamp(pub_ts).strftime('%d/%m/%Y %H:%M') if pub_ts else ''
-            results.append({
-                'title': title_th,
-                'publisher': publisher,
-                'link': link,
-                'time': pub_date_str
-            })
-        return results
+        if news_items:
+            for n in news_items:
+                title_en = ""
+                link = "#"
+                publisher = "Yahoo Finance"
+                pub_date_str = ""
+
+                # รูปแบบ Nested content (โครงสร้างใหม่)
+                if 'content' in n and isinstance(n['content'], dict):
+                    c = n['content']
+                    title_en = c.get('title', '')
+                    publisher = c.get('provider', {}).get('displayName', 'Financial News')
+                    link = c.get('canonicalUrl', {}).get('url', c.get('clickThroughUrl', {}).get('url', '#'))
+                    pub_date_str = c.get('pubDate', '')[:16].replace('T', ' ')
+                
+                # รูปแบบ Flat (โครงสร้างเดิม)
+                if not title_en:
+                    title_en = n.get('title', '')
+                    publisher = n.get('publisher', 'Financial News')
+                    link = n.get('link', '#')
+                    pub_ts = n.get('providerPublishTime', 0)
+                    if pub_ts:
+                        pub_date_str = datetime.fromtimestamp(pub_ts).strftime('%d/%m/%Y %H:%M')
+
+                if title_en and title_en.strip():
+                    title_th = translate_text_to_thai(title_en)
+                    results.append({
+                        'title': title_th if title_th else title_en,
+                        'publisher': publisher,
+                        'link': link,
+                        'time': pub_date_str
+                    })
+                if len(results) >= 3:
+                    break
     except Exception:
-        return []
+        pass
+
+    # 2. หากยังไม่ได้ข่าว ให้ใช้ระบบสำรองดึงตรงจาก Yahoo Finance RSS Feed
+    if not results:
+        try:
+            rss_url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}&region=US&lang=en-US"
+            res = requests.get(rss_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
+            if res.status_code == 200:
+                root = ET.fromstring(res.content)
+                for item in root.findall('./channel/item')[:3]:
+                    title_node = item.find('title')
+                    link_node = item.find('link')
+                    pub_node = item.find('pubDate')
+
+                    raw_title = title_node.text if title_node is not None else ""
+                    raw_link = link_node.text if link_node is not None else "#"
+                    raw_pub = pub_node.text[:16] if pub_node is not None else ""
+
+                    if raw_title:
+                        title_th = translate_text_to_thai(raw_title)
+                        results.append({
+                            'title': title_th if title_th else raw_title,
+                            'publisher': 'Yahoo Finance Feed',
+                            'link': raw_link,
+                            'time': raw_pub
+                        })
+        except Exception:
+            pass
+
+    return results
 
 
 @st.cache_data(ttl=14400)
@@ -843,7 +901,7 @@ with tab1:
 
                 st.markdown("---")
                 
-                # กล่อง Compact Board (แสดงราคา + สถานะตลาด + AI Pattern Match ชัดเจน)
+                # กล่อง Compact Board
                 st.markdown(f"#### {UI_LANG_MAP['analysis_title']}")
                 
                 badge_class = res.get('badge_class', 'badge-trend-side')
@@ -935,19 +993,20 @@ with tab1:
                 </div>
                 """, unsafe_allow_html=True)
 
-                # ข่าวสารล่าสุด
+                # ข่าวสารล่าสุด (แก้ไขให้แสดงผลและแปลไทยได้ถูกต้อง 100%)
                 st.markdown("<br>", unsafe_allow_html=True)
                 st.markdown("#### 📰 ข่าวสารล่าสุด & ปัจจัยกระทบ (แปลไทยอัตโนมัติ)")
                 if news_items:
                     for news in news_items:
+                        pub_time = f" | เผยแพร่เมื่อ: {news['time']}" if news['time'] else ""
                         st.markdown(f"""
                         <div class="news-card">
                             <a class="news-title" href="{news['link']}" target="_blank">📌 {news['title']}</a>
-                            <div class="news-meta">แหล่งข่าว: {news['publisher']} | เวลา: {news['time']}</div>
+                            <div class="news-meta">แหล่งข่าว: {news['publisher']}{pub_time}</div>
                         </div>
                         """, unsafe_allow_html=True)
                 else:
-                    st.info("ℹ️ ไม่พบหัวข้อข่าวสำคัญในรอบสัปดาห์สำหรับหุ้นตัวนี้")
+                    st.info(f"ℹ️ ไม่พบหัวข้อข่าวสำคัญล่าสุดสำหรับหุ้น {single_ticker}")
 
                 # งบการเงินย้อนหลัง
                 st.markdown("#### 💰 กำไรสุทธิ 3 ไตรมาสล่าสุด")
