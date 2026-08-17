@@ -12,7 +12,7 @@ import plotly.graph_objects as go
 
 # ================= ส่วนตั้งค่าแอปและภาษา =================
 UI_LANG_MAP = {
-    'search_ticker_title': "US Stock Scanner PRO By.Jetsada",
+    'search_ticker_title': "US Stock Scanner PRO (By.Jetsada)",
     'search_ticker_subtitle': "ระบบสแกนเทคนิคอล • คำนวณ % ขาขึ้น • AI Pattern • 3 แนวรับ 4 แนวต้าน",
     'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB, AAOI, IREN):",
     'btn_analyze_single': "🔎 วิเคราะห์ทันที",
