@@ -1191,35 +1191,29 @@ with tab2:
         server_state["last_scanned_dt"] = datetime.now()
         server_state["last_scanned_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-   if results:
-            # ใช้ฟังก์ชันช่วยเติมข้อมูลที่ขาดหายไปก่อนนำไปสร้างตาราง
-            processed_data = []
-            for item in results:
-                d = item['res_data']
-                # เติมค่า Default หากคีย์ใดคีย์หนึ่งหายไป
-                clean_d = {
-                    'Ticker': d.get('Ticker', 'N/A'),
-                    'longNameEn': d.get('longNameEn', 'N/A'),
-                    'Exchange': d.get('Exchange', 'US Market'),
-                    'sectorTh': d.get('sectorTh', 'N/A'),
-                    'Price ($)': d.get('Price ($)', 0),
-                    'status_text': d.get('status_text', 'N/A'),
-                    'pattern_name': d.get('pattern_name', 'N/A'),
-                    'Support 1 ($)': d.get('Support 1 ($)', 0),
-                    'Support 2 ($)': d.get('Support 2 ($)', 0),
-                    'Support 3 ($)': d.get('Support 3 ($)', 0),
-                    'RSI': d.get('RSI', 0),
-                    'Resist 1 ($)': d.get('Resist 1 ($)', 0),
-                    'Resist 2 ($)': d.get('Resist 2 ($)', 0),
-                    'Resist 3 ($)': d.get('Resist 3 ($)', 0),
-                    'Resist 4 ($)': d.get('Resist 4 ($)', 0),
-                    'Volume': d.get('Volume', '0'),
-                    'Date': d.get('Date', 'N/A')
-                }
-                processed_data.append(clean_d)
-            
-            server_state["latest_df"] = pd.DataFrame(processed_data)
+ # --- TAB 2: สแกนคัดหุ้นทั้งตลาด ---
+with tab2:
+    st.markdown("### 🚀 สแกนหาหุ้นทรงสวยประจำวัน (ทั้งตลาด NASDAQ, NYSE, AMEX)")
+    
+    is_busy = server_state["is_scanning"]
+    
+    col_btn1, col_btn2 = st.columns([3, 1])
+    with col_btn1:
+        scan_btn = st.button(UI_LANG_MAP['btn_scan_market'], disabled=is_busy, key="btn_scan_all")
+    with col_btn2:
+        reset_btn = st.button("🔄 รีเซ็ตข้อมูลสแกน", disabled=is_busy, key="btn_reset_all")
+
+    if is_busy:
+        st.warning("⏳ **ขณะนี้มีผู้ใช้งานท่านอื่นกำลังสแกนทั้งตลาดอยู่** ระบบกำลังประมวลผลให้ส่วนกลาง กรุณารอประมาณ 1-2 นาที จากนั้นผลลัพธ์จะแสดงขึ้นมาโดยอัตโนมัติครับ")
+
+    if reset_btn and not is_busy:
+        server_state["latest_results"] = None
+        server_state["latest_df"] = None
+        server_state["last_scanned_at"] = None
+        server_state["last_scanned_dt"] = None
+        st.success("ล้างข้อมูลการสแกนส่วนกลางเรียบร้อยแล้ว")
         st.rerun()
+
     # ================= แสดงผลลัพธ์พร้อมระบบกรองตลาด (Filter Toolbar) =================
     if server_state["latest_results"]:
         all_results = server_state["latest_results"]
