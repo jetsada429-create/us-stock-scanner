@@ -29,7 +29,7 @@ PLOTLY_CONFIG = {
 UI_LANG_MAP = {
     'search_ticker_title': "US Stock Scanner PRO (by.Jetsada)",
     'search_ticker_subtitle': "ระบบสแกนเทคนิคอล • คำนวณ % โครงสร้างราคา • AI Pattern • 3 แนวรับ 4 แนวต้าน",
-    'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB, AAOI, RXT, BZAI):",
+    'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB, AAOI, RXT, CRWV, BZAI):",
     'btn_analyze_single': "🔎 วิเคราะห์ทันที",
     'btn_scan_market': "🚀 เริ่มสแกนทั้ง 3 ตลาด (7,000+ หุ้น)",
     'status_preparing_tickers': "⏳ กำลังดึงรายชื่อหุ้นทั้งหมดจาก NASDAQ, NYSE, AMEX...",
@@ -84,7 +84,7 @@ server_state = get_global_server_state()
 if 'watchlist' not in st.session_state:
     st.session_state.watchlist = []
 
-# ================= 3. Custom CSS ปรับแต่งสีพื้นหลังตามสถานะ =================
+# ================= 3. Custom CSS ปรับแต่งสีพื้นหลัง 5 สีตามสถานะ =================
 st.markdown(
     """
     <style>
@@ -128,46 +128,48 @@ st.markdown(
         transform: translateY(-1px);
     }
     
-    /* กล่องสถานะตามสีของ 5 สภาวะตลาด */
+    /* กล่องสถานะตามสี 5 สภาวะตลาด */
     .status-banner {
         border-radius: 8px;
-        padding: 10px 14px;
+        padding: 12px 16px;
         margin-bottom: 0.8rem;
         line-height: 1.5;
+        box-shadow: 0 3px 8px rgba(0,0,0,0.25);
     }
     .status-banner-uptrend {
-        background-color: #052e16 !important;
-        border: 1px solid #10b981 !important;
-        color: #d1fae5 !important;
+        background-color: #022c22 !important;
+        border: 1.5px solid #10b981 !important;
+        color: #a7f3d0 !important;
     }
     .status-banner-pullback {
         background-color: #451a03 !important;
-        border: 1px solid #f59e0b !important;
-        color: #fef3c7 !important;
+        border: 1.5px solid #f59e0b !important;
+        color: #fef08a !important;
     }
     .status-banner-support {
         background-color: #172554 !important;
-        border: 1px solid #3b82f6 !important;
-        color: #dbeafe !important;
+        border: 1.5px solid #38bdf8 !important;
+        color: #bae6fd !important;
     }
     .status-banner-sideways {
-        background-color: #0f172a !important;
-        border: 1px solid #64748b !important;
-        color: #e2e8f0 !important;
+        background-color: #1e293b !important;
+        border: 1.5px solid #94a3b8 !important;
+        color: #f1f5f9 !important;
     }
     .status-banner-downtrend {
         background-color: #4c0519 !important;
-        border: 1px solid #f43f5e !important;
-        color: #ffe4e6 !important;
+        border: 1.5px solid #f43f5e !important;
+        color: #fecdd3 !important;
     }
     .status-title-text {
-        font-size: 0.95rem;
+        font-size: 1.0rem;
         font-weight: 800;
         margin-bottom: 4px;
+        letter-spacing: -0.2px;
     }
     .status-desc-text {
-        font-size: 0.82rem;
-        opacity: 0.92;
+        font-size: 0.84rem;
+        opacity: 0.95;
     }
 
     .compact-board {
@@ -358,7 +360,10 @@ st.markdown(
         .snr-num { font-size: 0.78rem; }
         .block-container { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
     }
-    #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
+    
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
     </style>
     """,
     unsafe_allow_html=True,
@@ -370,7 +375,7 @@ st.markdown(f'<div class="sub-title">{UI_LANG_MAP["search_ticker_subtitle"]}</di
 # ================= 4. ฟังก์ชันดึงประวัติราคา Dual-Engine =================
 def fetch_stock_history_dual(ticker):
     """
-    ดึงข้อมูลย้อนหลัง 6 เดือน (Active Wave) ผ่าน Direct Yahoo API v8 ก่อน แล้วสำรองด้วย yfinance
+    ดึงข้อมูล 6 เดือน (Active Wave) ผ่าน Direct Yahoo API v8 ก่อน แล้วสำรองด้วย yfinance
     """
     ticker_clean = str(ticker).strip().upper()
     headers = {
@@ -419,7 +424,7 @@ def fetch_stock_history_dual(ticker):
 
 def calculate_swing_snr(df, latest_close):
     """
-    คำนวณแนวรับ-แนวต้านบนรอบคลื่นปัจจุบัน 120 วัน
+    สูตรคำนวณแนวรับ-แนวต้านตาม Active Wave ปัจจุบัน (สูงสุด 120 วัน)
     """
     n = len(df)
     window_n = min(n, 120)
@@ -440,7 +445,7 @@ def calculate_swing_snr(df, latest_close):
     recent_15d_low = float(np.min(lows[-15:]))
     recent_45d_low = float(np.min(lows[-45:]))
 
-    # กำหนดแนวรับ
+    # --- กำหนดแนวรับ ---
     if recent_15d_low < latest_close * 0.995 and recent_15d_low > latest_close * 0.85:
         s1 = recent_15d_low
     elif fib_500 < latest_close * 0.995 and fib_500 > latest_close * 0.88:
@@ -462,7 +467,7 @@ def calculate_swing_snr(df, latest_close):
     if s2 >= s1: s2 = s1 * 0.90
     if s3 >= s2: s3 = s2 * 0.75
 
-    # กำหนดแนวต้าน
+    # --- กำหนดแนวต้าน ---
     r4 = wave_high
     cand_resists = [fib_500, fib_382, fib_236]
     valid_resists = sorted([r for r in cand_resists if r > latest_close * 1.015 and r < r4 * 0.985])
@@ -486,7 +491,7 @@ def calculate_swing_snr(df, latest_close):
 
 def calculate_ai_pattern_match(df):
     """
-    วิเคราะห์รูปทรงกราฟเทียบกับ 5 รูปแบบมาตรฐาน
+    วิเคราะห์รูปทรงกราฟเทียบกับ 5 แพทเทิร์นมาตรฐาน (ใช้ 25 แท่งเทียนล่าสุด)
     """
     try:
         if df is None or len(df) < 15:
@@ -542,7 +547,7 @@ def get_us_stock_tickers():
         url = 'https://dumbstockapi.com/stock?exchange=NASDAQ,NYSE'
         return [s['ticker'] for s in requests.get(url, timeout=10).json()]
     except Exception:
-        return ['AAPL', 'NVDA', 'TSLA', 'AMD', 'MSFT', 'PLTR', 'RKLB', 'IREN', 'AAOI', 'RXT', 'BZAI']
+        return ['AAPL', 'NVDA', 'TSLA', 'AMD', 'MSFT', 'PLTR', 'RKLB', 'IREN', 'AAOI', 'RXT', 'CRWV', 'BZAI']
 
 
 def translate_text_to_thai(text):
@@ -625,8 +630,7 @@ def get_stock_news(ticker):
 @st.cache_data(ttl=14400)
 def get_financials(ticker):
     try:
-        stock = yf.Ticker(ticker, session=get_yfinance_session())
-        q_financials = stock.quarterly_financials
+        stock = yf.Ticker(ticker, session=get_yfinance_session()).quarterly_financials
         if q_financials is not None and 'Net Income' in q_financials.index:
             net_income = q_financials.loc['Net Income'].head(3)
             data = []
@@ -672,7 +676,7 @@ def create_ta_chart(df, ticker, res_data):
     return fig
 
 
-# ================= 6. ฟังก์ชันวิเคราะห์หลัก (จับลักษณะแท่งเทียน 1D แม่นยำ) =================
+# ================= 6. ฟังก์ชันวิเคราะห์หลัก (จำแนกลักษณะแท่งเทียน 1D อย่างแม่นยำ) =================
 @st.cache_data(ttl=300)
 def check_ma_snr_combo(ticker, info_mode=False):
     try:
@@ -681,6 +685,9 @@ def check_ma_snr_combo(ticker, info_mode=False):
             return None, None
 
         latest_close = float(df['close'].iloc[-1])
+        latest_open = float(df['open'].iloc[-1])
+        is_today_green = latest_close >= latest_open
+
         fast_ma = df['close'].rolling(20).mean()
         slow_ma = df['close'].rolling(50).mean()
 
@@ -700,23 +707,23 @@ def check_ma_snr_combo(ticker, info_mode=False):
 
         is_above_ma20 = latest_close >= (fast_ma.iloc[-1] if pd.notna(fast_ma.iloc[-1]) else latest_close)
         is_above_ma50 = latest_close >= (slow_ma.iloc[-1] if pd.notna(slow_ma.iloc[-1]) else latest_close)
-        is_ma_bull = (fast_ma.iloc[-1] >= slow_ma.iloc[-1]) if (pd.notna(fast_ma.iloc[-1]) and pd.notna(slow_ma.iloc[-1])) else True
+        is_ma_bull = (fast_ma.iloc[-1] >= slow_ma.iloc[-1]) if (pd.notna(fast_ma.iloc[-1]) and pd.notna(slow_ma.iloc[-1])) else False
 
+        # คำนวณคะแนนภาพรวม
         bull_score = 0
         if is_above_ma20: bull_score += 30
         if is_above_ma50: bull_score += 25
         if is_ma_bull: bull_score += 20
         if 50 <= latest_rsi <= 72: bull_score += 15
         elif 40 <= latest_rsi < 50: bull_score += 5
-        if drop_8d_pct > -12: bull_score += 10
+        if drop_8d_pct > -8: bull_score += 10
         bullish_pct = min(96.0, max(5.0, round(bull_score * 0.95 + 4.0, 1)))
 
-        # ระยะห่างจากแนวรับที่ 1
         dist_s1_pct = ((latest_close - s1) / s1) * 100
 
-        # ================= ตรรกะจำแนก 5 สภาวะตลาดแท้จริง (ตามแท่งเทียน 1D) =================
+        # ================= ตรรกะ 5 สภาวะตลาดแท้จริง (ตรงตามพฤติกรรมแท่งเทียน 1D) =================
         # 1. ขาลงชัดเจน / โดนทุบหนัก (หลุดเส้นค่าเฉลี่ยหลัก หรือย่อตัวลึก)
-        if (not is_above_ma20 and not is_above_ma50 and latest_rsi < 45) or drop_8d_pct <= -18.0:
+        if (not is_above_ma20 and not is_above_ma50 and latest_rsi < 45) or drop_8d_pct <= -15.0:
             trend_status = "DOWNTREND"
             status_text = "📉 ลงแรง / ขาลงชัดเจน (ห้ามรับมีด)"
             status_box_class = "status-banner-downtrend"
@@ -724,32 +731,32 @@ def check_ma_snr_combo(ticker, info_mode=False):
             badge_label = f"📉 ลงแรง/ขาลง: {100.0 - bullish_pct:.1f}%"
             status_desc = f"⚠️ หุ้นหลุดเส้นค่าเฉลี่ยหลัก (ย่อตัวจากยอด 8 วัน {drop_8d_pct:.2f}%) โครงสร้างเสียเปรียบ ยังไม่ควรรับมีด"
 
-        # 2. ขาขึ้นแข็งแกร่ง (ราคายืนเหนือ MA20 และ MA50 หรือเด้งขึ้นมาแรงต่อเนื่อง)
-        elif (is_above_ma20 and is_above_ma50 and latest_rsi >= 48) or (is_above_ma20 and bounce_8d_pct >= 6.0):
-            trend_status = "UPTREND"
-            status_text = "🚀 ขาขึ้นแข็งแกร่ง (Strong Uptrend)"
-            status_box_class = "status-banner-uptrend"
-            badge_class = "badge-trend-bull"
-            badge_label = f"🚀 ขาขึ้นแข็งแกร่ง: {bullish_pct}%"
-            status_desc = f"✨ ราคายืนเหนือเส้นแนวโน้มหลัก โมเมนตัมขาขึ้นสมบูรณ์ (ดีดตัวจากฐานล่าสุด +{bounce_8d_pct:.2f}%)"
-
-        # 3. ย่อพักฐานในแนวโน้มขาขึ้น (Healthy Pullback - โครงสร้างใหญ่ยังดี แต่ย่อทดสอบแนวรับ)
-        elif is_above_ma50 and drop_8d_pct <= -4.0 and latest_rsi >= 40:
+        # 2. ย่อพักฐาน (Healthy Pullback) - โครงสร้างใหญ่ขึ้น แต่แท่งเทียนล่าสุดเริ่มย่อตัวลงมา
+        elif (is_above_ma50 or is_ma_bull or bounce_8d_pct >= 8.0) and (drop_8d_pct <= -3.0 or not is_today_green) and latest_rsi >= 40:
             trend_status = "PULLBACK"
             status_text = "⏳ ย่อพักฐาน (Healthy Pullback)"
             status_box_class = "status-banner-pullback"
             badge_class = "badge-trend-pull"
             badge_label = f"⏳ ย่อพักฐาน: {bullish_pct}%"
-            status_desc = f"🔄 โครงสร้างใหญ่เป็นขาขึ้น กำลังย่อตัวพักฐานตามรอบ (ย่อจากยอด 8 วัน {drop_8d_pct:.2f}%) เพื่อสะสมแรง"
+            status_desc = f"🔄 หุ้นอยู่ในแนวโน้มใหญ่ขาขึ้น แต่แท่งเทียนกำลังย่อตัวพักฐานตามรอบ (ย่อจากยอด 8 วัน {drop_8d_pct:.2f}%) เพื่อสะสมแรง"
 
-        # 4. ช้อนแนวรับ (ราคาอยู่ในโซนแนวรับพอดี และเริ่มมีแรงเด้งสั้น 1-5%)
-        elif dist_s1_pct <= 4.5 and bounce_8d_pct <= 6.0 and latest_close >= s1 * 0.98:
+        # 3. ช้อนแนวรับ (ราคาลงมาแตะโซนแนวรับพอดี และเพิ่งเริ่มมีแรงเด้งสั้นๆ)
+        elif dist_s1_pct <= 4.5 and bounce_8d_pct <= 5.5 and latest_close >= s1 * 0.98:
             trend_status = "BUY_SUPPORT"
             status_text = f"🎯 ช้อนแนวรับ (เด้งจากฐาน +{bounce_8d_pct:.2f}%)"
             status_box_class = "status-banner-support"
             badge_class = "badge-trend-support"
             badge_label = f"🎯 ช้อนแนวรับ: {bullish_pct}%"
             status_desc = f"🛡️ ราคาอยู่ในโซนแนวรับสำคัญและเริ่มมีแรงดีดกลับตัว (+{bounce_8d_pct:.2f}%) เหมาะสะสมไม้ 1"
+
+        # 4. ขาขึ้นแข็งแกร่ง (ราคายืนเหนือ MA20 & MA50 + แท่งเทียนกำลังวิ่งขึ้นต่อเนื่อง)
+        elif is_above_ma20 and is_above_ma50 and latest_rsi >= 50 and drop_8d_pct > -3.0:
+            trend_status = "UPTREND"
+            status_text = "🚀 ขาขึ้นแข็งแกร่ง (Strong Uptrend)"
+            status_box_class = "status-banner-uptrend"
+            badge_class = "badge-trend-bull"
+            badge_label = f"🚀 ขาขึ้นแข็งแกร่ง: {bullish_pct}%"
+            status_desc = f"✨ ราคายืนเหนือเส้นแนวโน้มหลักทุกเส้น โมเมนตัมขาขึ้นสมบูรณ์ (ดีดตัวจากฐานล่าสุด +{bounce_8d_pct:.2f}%)"
 
         # 5. สะสมแรง / ไซด์เวย์ (แกว่งในกรอบแคบ)
         else:
@@ -811,7 +818,7 @@ tab1, tab2, tab3 = st.tabs([UI_LANG_MAP['tab_search_ticker'], UI_LANG_MAP['tab_s
 with tab1:
     col_in1, col_in2 = st.columns([3, 1])
     with col_in1:
-        single_ticker = st.text_input(UI_LANG_MAP['search_ticker_label'], value='AAOI').strip().upper()
+        single_ticker = st.text_input(UI_LANG_MAP['search_ticker_label'], value='CRWV').strip().upper()
     with col_in2:
         st.markdown("<div class='desktop-only-space'></div>", unsafe_allow_html=True)
         search_btn = st.button(UI_LANG_MAP['btn_analyze_single'])
@@ -830,7 +837,7 @@ with tab1:
                 st.markdown(f'<p class="company-header">{single_ticker} : {company_full_name}</p>', unsafe_allow_html=True)
                 st.markdown(f'<div class="sector-badge">🏷️ กลุ่มธุรกิจ: {sector_desc} | ย่อย: {industry_desc}</div>', unsafe_allow_html=True)
                 
-                # แสดงผลแถบสถานะพร้อมเปลี่ยนสีพื้นหลังตามสถานะ 5 สภาวะ
+                # แสดงผลแถบสถานะพร้อมเปลี่ยนสีพื้นหลัง 5 สีอย่างชัดเจน
                 box_css = res.get('status_box_class', 'status-banner-sideways')
                 st.markdown(f"""
                 <div class="status-banner {box_css}">
