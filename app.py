@@ -10,7 +10,22 @@ import streamlit as st
 import yfinance as yf
 import plotly.graph_objects as go
 
-# ================= ส่วนตั้งค่าแอปและภาษา =================
+# ================= 1. ตั้งค่าแอปและตัวแปรหลัก =================
+st.set_page_config(
+    page_title="US Stock Scanner PRO (by.Jetsada)",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+# ตัวแปรตั้งค่า Plotly Toolbar
+PLOTLY_CONFIG = {
+    'displayModeBar': True,
+    'displaylogo': False,
+    'responsive': True
+}
+
+# พจนานุกรมข้อความและภาษา
 UI_LANG_MAP = {
     'search_ticker_title': "US Stock Scanner PRO (by.Jetsada)",
     'search_ticker_subtitle': "ระบบสแกนเทคนิคอล • คำนวณ % โครงสร้างราคา • AI Pattern • 3 แนวรับ 4 แนวต้าน",
@@ -42,14 +57,7 @@ SECTOR_MAP_TH = {
     'Utilities': '💡 สาธารณูปโภค / ไฟฟ้า & ประปา'
 }
 
-st.set_page_config(
-    page_title=UI_LANG_MAP['search_ticker_title'],
-    page_icon="📈",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
-
-# Custom Session ป้องกัน Rate Limit (429)
+# ================= 2. จัดการ Session และ Global State =================
 @st.cache_resource
 def get_yfinance_session():
     session = requests.Session()
@@ -61,7 +69,6 @@ def get_yfinance_session():
     session.mount('http://', HTTPAdapter(max_retries=retries))
     return session
 
-# Server State ส่วนกลาง
 @st.cache_resource
 def get_global_server_state():
     return {
@@ -77,7 +84,7 @@ server_state = get_global_server_state()
 if 'watchlist' not in st.session_state:
     st.session_state.watchlist = []
 
-# ================= Custom CSS สไตล์ Modern FinTech (Responsive) =================
+# ================= 3. Custom CSS สไตล์ Modern FinTech (Responsive) =================
 st.markdown(
     """
     <style>
@@ -88,7 +95,6 @@ st.markdown(
         padding-right: 0.8rem !important;
         max-width: 1200px;
     }
-    
     .main-title {
         font-size: 1.55rem !important;
         font-weight: 900 !important;
@@ -105,7 +111,6 @@ st.markdown(
         text-align: center;
         margin-bottom: 0.6rem;
     }
-    
     .stButton > button {
         width: 100% !important;
         background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
@@ -122,7 +127,6 @@ st.markdown(
         opacity: 0.92;
         transform: translateY(-1px);
     }
-    
     .compact-board {
         background: #0B132B;
         border: 1px solid #1E293B;
@@ -323,10 +327,10 @@ st.markdown(
 st.markdown(f'<div class="main-title">{UI_LANG_MAP["search_ticker_title"]}</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="sub-title">{UI_LANG_MAP["search_ticker_subtitle"]}</div>', unsafe_allow_html=True)
 
-# ================= ฟังก์ชันดึงประวัติราคา Dual-Engine =================
+# ================= 4. ฟังก์ชันดึงประวัติราคา Dual-Engine =================
 def fetch_stock_history_dual(ticker):
     """
-    ดึงข้อมูล 6 เดือนสดๆ โดยลอง Direct Yahoo API v8 ก่อน แล้วสำรองด้วย yfinance
+    ดึงข้อมูลย้อนหลัง 6 เดือน (Active Wave) ผ่าน Direct Yahoo API v8 ก่อน แล้วสำรองด้วย yfinance
     """
     ticker_clean = str(ticker).strip().upper()
     headers = {
@@ -372,10 +376,10 @@ def fetch_stock_history_dual(ticker):
 
     return None
 
-
+# ================= 5. ฟังก์ชันคำนวณทางเทคนิคและสถิติ =================
 def calculate_swing_snr(df, latest_close):
     """
-    สูตรคำนวณแนวรับ-แนวต้านตาม Active Wave ปัจจุบัน (สูงสุด 120 วัน)
+    คำนวณแนวรับ-แนวต้านบนรอบคลื่นปัจจุบัน 120 วัน
     """
     n = len(df)
     window_n = min(n, 120)
@@ -396,7 +400,7 @@ def calculate_swing_snr(df, latest_close):
     recent_15d_low = float(np.min(lows[-15:]))
     recent_45d_low = float(np.min(lows[-45:]))
 
-    # --- กำหนดแนวรับ (Supports) ---
+    # กำหนดแนวรับ
     if recent_15d_low < latest_close * 0.995 and recent_15d_low > latest_close * 0.85:
         s1 = recent_15d_low
     elif fib_500 < latest_close * 0.995 and fib_500 > latest_close * 0.88:
@@ -418,7 +422,7 @@ def calculate_swing_snr(df, latest_close):
     if s2 >= s1: s2 = s1 * 0.90
     if s3 >= s2: s3 = s2 * 0.75
 
-    # --- กำหนดแนวต้าน (Resistances) ---
+    # กำหนดแนวต้าน
     r4 = wave_high
     cand_resists = [fib_500, fib_382, fib_236]
     valid_resists = sorted([r for r in cand_resists if r > latest_close * 1.015 and r < r4 * 0.985])
@@ -442,7 +446,7 @@ def calculate_swing_snr(df, latest_close):
 
 def calculate_ai_pattern_match(df):
     """
-    วิเคราะห์รูปทรงกราฟเทียบกับ 5 แพทเทิร์นมาตรฐาน (ใช้ 25 แท่งเทียนล่าสุด)
+    วิเคราะห์รูปทรงกราฟเทียบกับ 5 รูปแบบมาตรฐาน
     """
     try:
         if df is None or len(df) < 15:
@@ -628,7 +632,7 @@ def create_ta_chart(df, ticker, res_data):
     return fig
 
 
-# ================= ฟังก์ชันหลักในการวิเคราะห์ =================
+# ================= 6. ฟังก์ชันวิเคราะห์หลัก (TTL 300s) =================
 @st.cache_data(ttl=300)
 def check_ma_snr_combo(ticker, info_mode=False):
     try:
@@ -742,7 +746,7 @@ def check_ma_snr_combo(ticker, info_mode=False):
     return None, None
 
 
-# ================= สร้างหน้าจอแท็บหลัก =================
+# ================= 7. ส่วนแสดงผล UI หน้าจอ =================
 tab1, tab2, tab3 = st.tabs([UI_LANG_MAP['tab_search_ticker'], UI_LANG_MAP['tab_scan_market'], UI_LANG_MAP['tab_watchlist']])
 
 # --- TAB 1: ค้นหาหุ้นรายตัว ---
