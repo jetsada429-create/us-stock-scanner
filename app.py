@@ -12,14 +12,14 @@ import plotly.graph_objects as go
 
 # ================= ส่วนตั้งค่าแอปและภาษา =================
 UI_LANG_MAP = {
-    'search_ticker_title': "US Stock Scanner PRO (By.Jetsada)",
+    'search_ticker_title': "US Stock Scanner PRO (by.Jetsada)",
     'search_ticker_subtitle': "ระบบสแกนเทคนิคอล • คำนวณ % โครงสร้างราคา • AI Pattern • 3 แนวรับ 4 แนวต้าน",
-    'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB, AAOI, BZAI):",
+    'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB, AAOI, RXT, BZAI):",
     'btn_analyze_single': "🔎 วิเคราะห์ทันที",
     'btn_scan_market': "🚀 เริ่มสแกนทั้ง 3 ตลาด (7,000+ หุ้น)",
     'status_preparing_tickers': "⏳ กำลังดึงรายชื่อหุ้นทั้งหมดจาก NASDAQ, NYSE, AMEX...",
     'status_scanning': "⏳ สแกนไปแล้ว {count}/{total} ตัว...",
-    'status_analyzing_single': "⏳ กำลังดึงข้อมูลและวิเคราะห์ {ticker}...",
+    'status_analyzing_single': "⏳ กำลังดึงข้อมูลสดและวิเคราะห์ {ticker}...",
     'expander_business_summary': "📖 สรุปธุรกิจ & โครงสร้างผู้ถือหุ้น (แปลไทยอัตโนมัติ)",
     'chart_title_single': "📈 กราฟเทคนิค 3 แนวรับ และ 4 ระดับแนวต้าน",
     'analysis_title': "📊 ข้อมูลแนวรับ - แนวต้าน & ตัวชี้วัดสำคัญ",
@@ -299,9 +299,7 @@ st.markdown(
         display: block;
         margin-bottom: 3px;
     }
-    .news-title:hover {
-        text-decoration: underline;
-    }
+    .news-title:hover { text-decoration: underline; }
     .news-meta { font-size: 0.72rem; color: #94A3B8; }
     
     .desktop-only-space { height: 28px; display: block; }
@@ -325,6 +323,55 @@ st.markdown(
 st.markdown(f'<div class="main-title">{UI_LANG_MAP["search_ticker_title"]}</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="sub-title">{UI_LANG_MAP["search_ticker_subtitle"]}</div>', unsafe_allow_html=True)
 
+# ================= ฟังก์ชันดึงประวัติราคา Dual-Engine =================
+def fetch_stock_history_dual(ticker):
+    """
+    ดึงข้อมูล 6 เดือนสดๆ โดยลอง Direct Yahoo API v8 ก่อน แล้วสำรองด้วย yfinance
+    """
+    ticker_clean = str(ticker).strip().upper()
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+    }
+
+    # 1. Direct Yahoo API v8 (เร็ว เสถียร ไม่ติด Crumb Lock)
+    try:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker_clean}?range=6mo&interval=1d"
+        res = requests.get(url, headers=headers, timeout=6)
+        if res.status_code == 200:
+            data = res.json()
+            result = data.get('chart', {}).get('result', [])
+            if result:
+                r = result[0]
+                timestamps = r.get('timestamp', [])
+                quote = r.get('indicators', {}).get('quote', [{}])[0]
+                if timestamps and quote:
+                    df = pd.DataFrame({
+                        'open': quote.get('open', []),
+                        'high': quote.get('high', []),
+                        'low': quote.get('low', []),
+                        'close': quote.get('close', []),
+                        'volume': quote.get('volume', [])
+                    }, index=pd.to_datetime(timestamps, unit='s'))
+                    df = df.dropna(subset=['close'])
+                    if len(df) >= 15:
+                        return df
+    except Exception:
+        pass
+
+    # 2. สำรองด้วย yfinance
+    try:
+        stock = yf.Ticker(ticker_clean)
+        df = stock.history(period='6mo', interval='1d')
+        if df is not None and not df.empty and len(df) >= 15:
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+            df.columns = [str(c).lower() for c in df.columns]
+            return df
+    except Exception:
+        pass
+
+    return None
+
 
 def calculate_swing_snr(df, latest_close):
     """
@@ -345,7 +392,6 @@ def calculate_swing_snr(df, latest_close):
     fib_382 = wave_high - 0.382 * wave_range
     fib_500 = wave_high - 0.500 * wave_range
     fib_618 = wave_high - 0.618 * wave_range
-    fib_786 = wave_high - 0.786 * wave_range
 
     recent_15d_low = float(np.min(lows[-15:]))
     recent_45d_low = float(np.min(lows[-45:]))
@@ -364,8 +410,6 @@ def calculate_swing_snr(df, latest_close):
         s2 = recent_45d_low
     elif fib_618 < s1 * 0.96:
         s2 = fib_618
-    elif fib_786 < s1 * 0.96 and fib_786 > wave_low * 1.10:
-        s2 = fib_786
     else:
         s2 = s1 * 0.89
 
@@ -412,7 +456,6 @@ def calculate_ai_pattern_match(df):
         norm_closes = (closes - c_min) / (c_max - c_min)
         
         x = np.linspace(0, 1, bars)
-        
         templates = {
             "สร้างฐานยก Low.png": 0.15 + 0.75 * x + 0.08 * np.sin(x * 3 * np.pi),
             "สร้างฐานแบบ Double Bottom.png": 0.65 - 0.65 * np.sin(x * np.pi) + 0.25 * np.cos(x * 2 * np.pi),
@@ -428,34 +471,25 @@ def calculate_ai_pattern_match(df):
             norm_pat = (pat_curve - np.min(pat_curve)) / (np.max(pat_curve) - np.min(pat_curve) + 1e-6)
             mae = np.mean(np.abs(norm_closes - norm_pat))
             corr = np.corrcoef(norm_closes, norm_pat)[0, 1]
-            if np.isnan(corr):
-                corr = 0.5
+            if np.isnan(corr): corr = 0.5
             
             sim_score = (max(0.0, 1.0 - mae) * 0.65 + max(0.0, (corr + 1.0) / 2.0) * 0.35) * 100.0
             if sim_score > best_score:
                 best_score = sim_score
                 best_pattern = pat_name
 
-        final_score = round(max(70.0, min(95.5, best_score)), 1)
-        return best_pattern, final_score
+        return best_pattern, round(max(70.0, min(95.5, best_score)), 1)
     except Exception:
         return "สร้างฐานสะสมกำลัง.png", 76.5
 
 
 def get_time_elapsed_thai(last_dt):
-    if not last_dt:
-        return ""
+    if not last_dt: return ""
     diff = datetime.now() - last_dt
-    total_seconds = int(diff.total_seconds())
-    if total_seconds < 60:
-        return f" (เพิ่งสแกนเมื่อ {total_seconds} วิที่แล้ว)"
-    elif total_seconds < 3600:
-        mins = total_seconds // 60
-        return f" (สแกนไปแล้ว {mins} นาทีที่แล้ว)"
-    else:
-        hours = total_seconds // 3600
-        mins = (total_seconds % 3600) // 60
-        return f" (สแกนไปแล้ว {hours} ชม. {mins} นาทีที่แล้ว)"
+    secs = int(diff.total_seconds())
+    if secs < 60: return f" (เพิ่งสแกนเมื่อ {secs} วิที่แล้ว)"
+    elif secs < 3600: return f" (สแกนไปแล้ว {secs // 60} นาทีที่แล้ว)"
+    else: return f" (สแกนไปแล้ว {secs // 3600} ชม. ก่อน)"
 
 
 @st.cache_data(ttl=86400)
@@ -464,128 +498,67 @@ def get_us_stock_tickers():
         url = 'https://dumbstockapi.com/stock?exchange=NASDAQ,NYSE'
         return [s['ticker'] for s in requests.get(url, timeout=10).json()]
     except Exception:
-        return ['AAPL', 'NVDA', 'TSLA', 'AMD', 'MSFT', 'PLTR', 'RKLB', 'IREN', 'AAOI', 'BZAI']
+        return ['AAPL', 'NVDA', 'TSLA', 'AMD', 'MSFT', 'PLTR', 'RKLB', 'IREN', 'AAOI', 'RXT', 'BZAI']
 
 
 def translate_text_to_thai(text):
-    if not text or text == 'N/A' or not str(text).strip():
-        return ''
+    if not text or text == 'N/A' or not str(text).strip(): return ''
     try:
         url = "https://translate.googleapis.com/translate_a/single"
         params = {"client": "gtx", "sl": "en", "tl": "th", "dt": "t", "q": text}
-        response = requests.get(url, params=params, timeout=4)
-        if response.status_code == 200:
-            res_json = response.json()
-            translated_text = "".join([item[0] for item in res_json[0] if item[0]])
-            if translated_text:
-                return translated_text
-    except Exception:
-        pass
+        res = requests.get(url, params=params, timeout=4)
+        if res.status_code == 200:
+            return "".join([item[0] for item in res.json()[0] if item[0]])
+    except Exception: pass
     return str(text)
 
 
-@st.cache_data(ttl=14400)
+@st.cache_data(ttl=1800)
 def get_company_info_and_holders(ticker):
     try:
-        stock = yf.Ticker(ticker, session=get_yfinance_session())
-        info = stock.info
-        
-        eng_summary = info.get('longBusinessSummary', 'N/A')
-        th_summary = translate_text_to_thai(eng_summary) if eng_summary != 'N/A' else 'N/A'
-        company_name = info.get('longName', ticker)
-        
-        raw_sector = info.get('sector', 'N/A')
-        raw_industry = info.get('industry', 'N/A')
-        sector_th = SECTOR_MAP_TH.get(raw_sector, raw_sector)
-        industry_th = translate_text_to_thai(raw_industry) if raw_industry != 'N/A' else 'N/A'
-        
-        shares_out = info.get('sharesOutstanding', 0)
-        shares_out_str = f"{shares_out:,.0f}" if shares_out else "N/A"
-        
-        inst_held = info.get('heldPercentInstitutions', 0)
-        inst_held_pct = f"{inst_held * 100:.2f}%" if inst_held else "N/A"
-        
-        insider_held = info.get('heldPercentInsiders', 0)
-        insider_held_pct = f"{insider_held * 100:.2f}%" if insider_held else "N/A"
-        
-        retail_held_pct = "N/A"
-        if inst_held and insider_held:
-            retail_calc = 100 - ((inst_held + insider_held) * 100)
-            retail_held_pct = f"{max(0.0, retail_calc):.2f}%"
-
+        info = yf.Ticker(ticker, session=get_yfinance_session()).info
         return {
-            'longNameEn': company_name,
-            'sectorTh': sector_th,
-            'industryTh': industry_th,
-            'summaryTh': th_summary,
-            'sharesOutstanding': shares_out_str,
-            'institutionalHeld': inst_held_pct,
-            'insiderHeld': insider_held_pct,
-            'retailHeld': retail_held_pct
+            'longNameEn': info.get('longName', ticker),
+            'sectorTh': SECTOR_MAP_TH.get(info.get('sector', ''), info.get('sector', 'N/A')),
+            'industryTh': translate_text_to_thai(info.get('industry', 'N/A')),
+            'summaryTh': translate_text_to_thai(info.get('longBusinessSummary', 'N/A')),
+            'sharesOutstanding': f"{info.get('sharesOutstanding', 0):,.0f}" if info.get('sharesOutstanding') else "N/A",
+            'institutionalHeld': f"{info.get('heldPercentInstitutions', 0)*100:.2f}%" if info.get('heldPercentInstitutions') else "N/A",
+            'insiderHeld': f"{info.get('heldPercentInsiders', 0)*100:.2f}%" if info.get('heldPercentInsiders') else "N/A",
+            'retailHeld': f"{100 - (info.get('heldPercentInstitutions',0)+info.get('heldPercentInsiders',0))*100:.2f}%" if info.get('heldPercentInstitutions') else "N/A"
         }
     except Exception:
-        return {
-            'longNameEn': ticker,
-            'sectorTh': 'N/A',
-            'industryTh': 'N/A',
-            'summaryTh': 'N/A',
-            'sharesOutstanding': 'N/A',
-            'institutionalHeld': 'N/A',
-            'insiderHeld': 'N/A',
-            'retailHeld': 'N/A'
-        }
+        return {'longNameEn': ticker, 'sectorTh': 'N/A', 'industryTh': 'N/A', 'summaryTh': 'N/A', 'sharesOutstanding': 'N/A', 'institutionalHeld': 'N/A', 'insiderHeld': 'N/A', 'retailHeld': 'N/A'}
 
 
-# ================= ฟังก์ชันดึงข่าวสารที่ได้รับการปรับปรุงให้แก้ปัญหา N/A 100% =================
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=900)
 def get_stock_news(ticker):
-    """
-    ดึงข่าวสารล่าสุด รองรับโครงสร้าง yfinance ทุกเวอร์ชัน + มีระบบสำรองดึงผ่าน RSS Feed
-    """
     results = []
-    
-    # 1. ลองดึงผ่าน yfinance ก่อน (รองรับทั้งแบบ Flat และแบบ Nested content)
     try:
         stock = yf.Ticker(ticker, session=get_yfinance_session())
         news_items = stock.news
         if news_items:
             for n in news_items:
-                title_en = ""
-                link = "#"
-                publisher = "Yahoo Finance"
-                pub_date_str = ""
-
-                # รูปแบบ Nested content (โครงสร้างใหม่)
+                title_en, link, publisher, pub_date_str = "", "#", "Yahoo Finance", ""
                 if 'content' in n and isinstance(n['content'], dict):
                     c = n['content']
                     title_en = c.get('title', '')
                     publisher = c.get('provider', {}).get('displayName', 'Financial News')
                     link = c.get('canonicalUrl', {}).get('url', c.get('clickThroughUrl', {}).get('url', '#'))
                     pub_date_str = c.get('pubDate', '')[:16].replace('T', ' ')
-                
-                # รูปแบบ Flat (โครงสร้างเดิม)
                 if not title_en:
                     title_en = n.get('title', '')
                     publisher = n.get('publisher', 'Financial News')
                     link = n.get('link', '#')
                     pub_ts = n.get('providerPublishTime', 0)
-                    if pub_ts:
-                        pub_date_str = datetime.fromtimestamp(pub_ts).strftime('%d/%m/%Y %H:%M')
+                    if pub_ts: pub_date_str = datetime.fromtimestamp(pub_ts).strftime('%d/%m/%Y %H:%M')
 
                 if title_en and title_en.strip():
                     title_th = translate_text_to_thai(title_en)
-                    results.append({
-                        'title': title_th if title_th else title_en,
-                        'publisher': publisher,
-                        'link': link,
-                        'time': pub_date_str
-                    })
-                if len(results) >= 3:
-                    break
-    except Exception:
-        pass
+                    results.append({'title': title_th if title_th else title_en, 'publisher': publisher, 'link': link, 'time': pub_date_str})
+                if len(results) >= 3: break
+    except Exception: pass
 
-    # 2. หากยังไม่ได้ข่าว ให้ใช้ระบบสำรองดึงตรงจาก Yahoo Finance RSS Feed
     if not results:
         try:
             rss_url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}&region=US&lang=en-US"
@@ -593,24 +566,14 @@ def get_stock_news(ticker):
             if res.status_code == 200:
                 root = ET.fromstring(res.content)
                 for item in root.findall('./channel/item')[:3]:
-                    title_node = item.find('title')
-                    link_node = item.find('link')
-                    pub_node = item.find('pubDate')
-
-                    raw_title = title_node.text if title_node is not None else ""
-                    raw_link = link_node.text if link_node is not None else "#"
-                    raw_pub = pub_node.text[:16] if pub_node is not None else ""
-
+                    t_node, l_node, p_node = item.find('title'), item.find('link'), item.find('pubDate')
+                    raw_title = t_node.text if t_node is not None else ""
+                    raw_link = l_node.text if l_node is not None else "#"
+                    raw_pub = p_node.text[:16] if p_node is not None else ""
                     if raw_title:
                         title_th = translate_text_to_thai(raw_title)
-                        results.append({
-                            'title': title_th if title_th else raw_title,
-                            'publisher': 'Yahoo Finance Feed',
-                            'link': raw_link,
-                            'time': raw_pub
-                        })
-        except Exception:
-            pass
+                        results.append({'title': title_th if title_th else raw_title, 'publisher': 'Yahoo Feed', 'link': raw_link, 'time': raw_pub})
+        except Exception: pass
 
     return results
 
@@ -631,114 +594,63 @@ def get_financials(ticker):
                     })
             if data:
                 return pd.DataFrame(data)
-    except Exception:
-        pass
+    except Exception: pass
     return None
 
 
 def create_ta_chart(df, ticker, res_data):
-    if df is None or df.empty:
-        return None
-
+    if df is None or df.empty: return None
     fig = go.Figure(data=[go.Candlestick(
         x=df.index,
         open=df['open'], high=df['high'],
         low=df['low'], close=df['close'],
         name='ราคา'
     )])
-
-    fast_ma = df['close'].rolling(window=20).mean()
-    slow_ma = df['close'].rolling(window=50).mean()
-    
+    fast_ma = df['close'].rolling(20).mean()
+    slow_ma = df['close'].rolling(50).mean()
     fig.add_trace(go.Scatter(x=df.index, y=fast_ma, line=dict(color='#38BDF8', width=1.2), name='MA20'))
     fig.add_trace(go.Scatter(x=df.index, y=slow_ma, line=dict(color='#FB923C', width=1.2), name='MA50'))
 
-    latest_date = df.index[-1]
-    earliest_date = df.index[0]
-    
-    supports = [
-        ('Support 1 ($)', '#22C55E', -12),
-        ('Support 2 ($)', '#16A34A', 12),
-        ('Support 3 ($)', '#15803D', -12)
-    ]
-    for key, color, ay_pos in supports:
+    for key, color, ay_pos in [('Support 1 ($)', '#22C55E', -12), ('Support 2 ($)', '#16A34A', 12), ('Support 3 ($)', '#15803D', -12)]:
         if key in res_data:
             val = res_data[key]
-            fig.add_shape(type="line", x0=earliest_date, y0=val, x1=latest_date, y1=val, line=dict(color=color, width=1.6, dash='dash'))
-            fig.add_annotation(
-                x=latest_date, y=val, 
-                text=f"{key.replace(' ($)', '')}: ${val}", 
-                bgcolor=color, 
-                font=dict(color="white", size=9), 
-                xanchor="left",
-                ax=8, ay=ay_pos
-            )
+            fig.add_shape(type="line", x0=df.index[0], y0=val, x1=df.index[-1], y1=val, line=dict(color=color, width=1.6, dash='dash'))
+            fig.add_annotation(x=df.index[-1], y=val, text=f"{key.replace(' ($)', '')}: ${val}", bgcolor=color, font=dict(color="white", size=9), xanchor="left", ax=8, ay=ay_pos)
 
-    resistances = [
-        ('Resist 1 ($)', '#EF4444', -12),
-        ('Resist 2 ($)', '#F97316', 12),
-        ('Resist 3 ($)', '#EAB308', -12),
-        ('Resist 4 ($)', '#991B1B', 12)
-    ]
-    for key, color, ay_pos in resistances:
+    for key, color, ay_pos in [('Resist 1 ($)', '#EF4444', -12), ('Resist 2 ($)', '#F97316', 12), ('Resist 3 ($)', '#EAB308', -12), ('Resist 4 ($)', '#991B1B', 12)]:
         if key in res_data:
             val = res_data[key]
-            fig.add_shape(type="line", x0=earliest_date, y0=val, x1=latest_date, y1=val, line=dict(color=color, width=1.6, dash='dash'))
-            fig.add_annotation(
-                x=latest_date, y=val, 
-                text=f"{key.replace(' ($)', '')}: ${val}", 
-                bgcolor=color, 
-                font=dict(color="white", size=9), 
-                xanchor="left",
-                ax=8, ay=ay_pos
-            )
+            fig.add_shape(type="line", x0=df.index[0], y0=val, x1=df.index[-1], y1=val, line=dict(color=color, width=1.6, dash='dash'))
+            fig.add_annotation(x=df.index[-1], y=val, text=f"{key.replace(' ($)', '')}: ${val}", bgcolor=color, font=dict(color="white", size=9), xanchor="left", ax=8, ay=ay_pos)
 
     fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
-
-    fig.update_layout(
-        xaxis_rangeslider_visible=False,
-        template='plotly_dark',
-        margin=dict(l=6, r=65, t=10, b=6),
-        height=340,
-        dragmode='pan',
-        yaxis_title="ราคา ($)",
-        showlegend=False
-    )
+    fig.update_layout(xaxis_rangeslider_visible=False, template='plotly_dark', margin=dict(l=6, r=65, t=10, b=6), height=340, dragmode='pan', yaxis_title="ราคา ($)", showlegend=False)
     return fig
 
 
-@st.cache_data(ttl=14400)
+# ================= ฟังก์ชันหลักในการวิเคราะห์ =================
+@st.cache_data(ttl=300)
 def check_ma_snr_combo(ticker, info_mode=False):
-    """
-    ดึงข้อมูล 6 เดือน (120 วัน) และจำแนก 4 สภาวะตลาดหลัก
-    """
     try:
-        stock = yf.Ticker(ticker, session=get_yfinance_session())
-        df = stock.history(period='6mo', interval='1d')
-        if len(df) < 30 or df['Close'].iloc[-1] < 0.05:
+        df = fetch_stock_history_dual(ticker)
+        if df is None or df.empty or len(df) < 15:
             return None, None
 
-        df.columns = [col.lower() for col in df.columns]
-        
-        delta = df['close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        
-        loss_safe = loss.replace(0, np.nan)
-        rs = gain / loss_safe
-        df['rsi'] = 100 - (100 / (1 + rs))
-        df['rsi'] = df['rsi'].fillna(100.0)
-        latest_rsi = round(df['rsi'].iloc[-1], 2)
+        latest_close = float(df['close'].iloc[-1])
+        fast_ma = df['close'].rolling(20).mean()
+        slow_ma = df['close'].rolling(50).mean()
 
-        latest_close = df['close'].iloc[-1]
-        fast_ma = df['close'].rolling(window=20).mean()
-        slow_ma = df['close'].rolling(window=50).mean()
+        delta = df['close'].diff()
+        gain = delta.where(delta > 0, 0).rolling(14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+        loss_safe = loss.replace(0, np.nan)
+        rsi_series = 100 - (100 / (1 + (gain / loss_safe)))
+        latest_rsi = round(float(rsi_series.fillna(100.0).iloc[-1]), 2)
 
         s1, s2, s3, r1, r2, r3, r4 = calculate_swing_snr(df, latest_close)
 
         recent_8d_high = float(df['high'].tail(8).max())
         drop_8d_pct = ((latest_close - recent_8d_high) / recent_8d_high) * 100
-        
         recent_8d_low = float(df['low'].tail(8).min())
         bounce_8d_pct = ((latest_close - recent_8d_low) / recent_8d_low) * 100 if recent_8d_low > 0 else 0.0
 
@@ -746,7 +658,6 @@ def check_ma_snr_combo(ticker, info_mode=False):
         is_above_ma50 = latest_close >= (slow_ma.iloc[-1] if pd.notna(slow_ma.iloc[-1]) else latest_close)
         is_ma_bull = (fast_ma.iloc[-1] >= slow_ma.iloc[-1]) if (pd.notna(fast_ma.iloc[-1]) and pd.notna(slow_ma.iloc[-1])) else True
 
-        # คำนวณ % โครงสร้างราคา
         bull_score = 0
         if is_above_ma20: bull_score += 30
         if is_above_ma50: bull_score += 25
@@ -754,38 +665,33 @@ def check_ma_snr_combo(ticker, info_mode=False):
         if 50 <= latest_rsi <= 72: bull_score += 15
         elif 40 <= latest_rsi < 50: bull_score += 5
         if drop_8d_pct > -12: bull_score += 10
-        
         bullish_pct = min(96.0, max(5.0, round(bull_score * 0.95 + 4.0, 1)))
 
-        # ================= จำแนก 4 สภาวะตลาดหลัก =================
+        # 4 สภาวะตลาด
         if drop_8d_pct <= -20.0 or (not is_above_ma20 and not is_above_ma50 and latest_rsi < 40 and drop_8d_pct <= -15.0):
             trend_status = "DOWNTREND"
             status_text = "📉 ลงแรง / ขาลงชัดเจน (ห้ามรับมีด)"
             badge_class = "badge-trend-bear"
             badge_label = f"📉 ลงแรง/ขาลง: {100.0 - bullish_pct:.1f}%"
             status_desc = f"⚠️ หุ้นถูกเทขายรุนแรง (ย่อตัวจากยอด 8 วัน {drop_8d_pct:.2f}%) หลุดแนวรับสำคัญและเสียทรง"
-
         elif is_above_ma20 and is_above_ma50 and is_ma_bull and latest_rsi >= 50:
             trend_status = "UPTREND"
             status_text = "🚀 ขาขึ้นแข็งแกร่ง (Strong Uptrend)"
             badge_class = "badge-trend-bull"
             badge_label = f"🚀 ขาขึ้นแข็งแกร่ง: {bullish_pct}%"
             status_desc = f"✨ ราคาฟอร์มตัวยืนเหนือเส้นค่าเฉลี่ยทุกเส้น โมเมนตัมขาขึ้นสมบูรณ์ (ดีดตัวจากฐานล่าสุด +{bounce_8d_pct:.2f}%)"
-
         elif is_above_ma50 and drop_8d_pct <= -6.0 and latest_rsi >= 42:
             trend_status = "PULLBACK"
             status_text = "⏳ ย่อพักฐาน (Healthy Pullback)"
             badge_class = "badge-trend-pull"
             badge_label = f"⏳ ย่อพักฐาน: {bullish_pct}%"
             status_desc = f"🔄 หุ้นอยู่ในแนวโน้มใหญ่ขาขึ้น แต่กำลังย่อตัวพักฐานตามรอบ (ย่อจากยอด 8 วัน {drop_8d_pct:.2f}%)"
-
         elif bounce_8d_pct >= 2.0 and latest_close <= s1 * 1.04:
             trend_status = "BUY_SUPPORT"
             status_text = f"🎯 ช้อนแนวรับ (เด้งจากฐาน +{bounce_8d_pct:.2f}%)"
             badge_class = "badge-trend-support"
             badge_label = f"🎯 ช้อนแนวรับ: {bullish_pct}%"
             status_desc = f"🛡️ ราคาลงมาแตะโซนแนวรับสำคัญและเริ่มมีแรงดีดกลับตัว (+{bounce_8d_pct:.2f}%) เหมาะสะสมไม้ 1"
-
         else:
             trend_status = "SIDEWAYS"
             status_text = "〰️ สะสมแรง / ไซด์เวย์"
@@ -795,6 +701,7 @@ def check_ma_snr_combo(ticker, info_mode=False):
 
         dist_from_sup = ((latest_close - s1) / s1) * 100
         pat_name, pat_score = calculate_ai_pattern_match(df.tail(60))
+        vol_val = df['volume'].iloc[-1] if 'volume' in df.columns else 0
 
         res_data = {
             'Ticker': ticker,
@@ -808,7 +715,7 @@ def check_ma_snr_combo(ticker, info_mode=False):
             'Resist 4 ($)': r4,
             'Dist_Sup (%)': f'{dist_from_sup:+.2f}%',
             'RSI': latest_rsi,
-            'Volume': f"{df['volume'].iloc[-1]:,.0f}",
+            'Volume': f"{vol_val:,.0f}",
             'Date': df.index[-1].strftime('%Y-%m-%d'),
             'pattern_name': pat_name,
             'pattern_score': pat_score,
@@ -823,8 +730,7 @@ def check_ma_snr_combo(ticker, info_mode=False):
         }
 
         if info_mode:
-            co_info = get_company_info_and_holders(ticker)
-            res_data.update(co_info)
+            res_data.update(get_company_info_and_holders(ticker))
 
         if not info_mode:
             if not (trend_status in ["UPTREND", "PULLBACK", "BUY_SUPPORT"]):
@@ -835,12 +741,6 @@ def check_ma_snr_combo(ticker, info_mode=False):
         pass
     return None, None
 
-
-PLOTLY_CONFIG = {
-    'displayModeBar': True,
-    'displaylogo': False,
-    'responsive': True
-}
 
 # ================= สร้างหน้าจอแท็บหลัก =================
 tab1, tab2, tab3 = st.tabs([UI_LANG_MAP['tab_search_ticker'], UI_LANG_MAP['tab_scan_market'], UI_LANG_MAP['tab_watchlist']])
@@ -903,7 +803,6 @@ with tab1:
                 
                 # กล่อง Compact Board
                 st.markdown(f"#### {UI_LANG_MAP['analysis_title']}")
-                
                 badge_class = res.get('badge_class', 'badge-trend-side')
                 badge_label = res.get('badge_label', '〰️ สะสมแรง')
                 pat_name = res.get('pattern_name', 'สร้างฐานสะสมกำลัง.png')
@@ -943,7 +842,6 @@ with tab1:
 
                 # การ์ดกลยุทธ์แนวรับแนวตั้ง
                 st.markdown("#### 🎯 กลยุทธ์แบ่งไม้เข้าซื้อ & ประเมินความแข็งแรงของแนวรับ")
-                
                 curr_p = res.get('Price ($)', 1.0)
                 dist_s1 = ((res.get('Support 1 ($)', 0) - curr_p) / curr_p) * 100
                 dist_s2 = ((res.get('Support 2 ($)', 0) - curr_p) / curr_p) * 100
@@ -993,7 +891,7 @@ with tab1:
                 </div>
                 """, unsafe_allow_html=True)
 
-                # ข่าวสารล่าสุด (แก้ไขให้แสดงผลและแปลไทยได้ถูกต้อง 100%)
+                # ข่าวสารล่าสุด
                 st.markdown("<br>", unsafe_allow_html=True)
                 st.markdown("#### 📰 ข่าวสารล่าสุด & ปัจจัยกระทบ (แปลไทยอัตโนมัติ)")
                 if news_items:
@@ -1209,11 +1107,10 @@ with tab3:
         
         for w_ticker in st.session_state.watchlist:
             try:
-                stock = yf.Ticker(w_ticker, session=get_yfinance_session())
-                df_w = stock.history(period='5d')
-                if not df_w.empty:
-                    curr_price = round(df_w['Close'].iloc[-1], 2)
-                    prev_close = df_w['Close'].iloc[-2] if len(df_w) > 1 else curr_price
+                df_w = fetch_stock_history_dual(w_ticker)
+                if df_w is not None and not df_w.empty:
+                    curr_price = round(float(df_w['close'].iloc[-1]), 2)
+                    prev_close = float(df_w['close'].iloc[-2]) if len(df_w) > 1 else curr_price
                     change = round(((curr_price - prev_close) / prev_close) * 100, 2)
                     
                     st.markdown(f"""
