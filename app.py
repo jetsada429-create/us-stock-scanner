@@ -84,7 +84,7 @@ server_state = get_global_server_state()
 if 'watchlist' not in st.session_state:
     st.session_state.watchlist = []
 
-# ================= 3. Custom CSS สไตล์ Modern FinTech (Responsive) =================
+# ================= 3. Custom CSS ปรับแต่งสีพื้นหลังตามสถานะ =================
 st.markdown(
     """
     <style>
@@ -127,6 +127,49 @@ st.markdown(
         opacity: 0.92;
         transform: translateY(-1px);
     }
+    
+    /* กล่องสถานะตามสีของ 5 สภาวะตลาด */
+    .status-banner {
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin-bottom: 0.8rem;
+        line-height: 1.5;
+    }
+    .status-banner-uptrend {
+        background-color: #052e16 !important;
+        border: 1px solid #10b981 !important;
+        color: #d1fae5 !important;
+    }
+    .status-banner-pullback {
+        background-color: #451a03 !important;
+        border: 1px solid #f59e0b !important;
+        color: #fef3c7 !important;
+    }
+    .status-banner-support {
+        background-color: #172554 !important;
+        border: 1px solid #3b82f6 !important;
+        color: #dbeafe !important;
+    }
+    .status-banner-sideways {
+        background-color: #0f172a !important;
+        border: 1px solid #64748b !important;
+        color: #e2e8f0 !important;
+    }
+    .status-banner-downtrend {
+        background-color: #4c0519 !important;
+        border: 1px solid #f43f5e !important;
+        color: #ffe4e6 !important;
+    }
+    .status-title-text {
+        font-size: 0.95rem;
+        font-weight: 800;
+        margin-bottom: 4px;
+    }
+    .status-desc-text {
+        font-size: 0.82rem;
+        opacity: 0.92;
+    }
+
     .compact-board {
         background: #0B132B;
         border: 1px solid #1E293B;
@@ -315,10 +358,7 @@ st.markdown(
         .snr-num { font-size: 0.78rem; }
         .block-container { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
     }
-    
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
+    #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
     </style>
     """,
     unsafe_allow_html=True,
@@ -376,7 +416,7 @@ def fetch_stock_history_dual(ticker):
 
     return None
 
-# ================= 5. ฟังก์ชันคำนวณทางเทคนิคและสถิติ =================
+
 def calculate_swing_snr(df, latest_close):
     """
     คำนวณแนวรับ-แนวต้านบนรอบคลื่นปัจจุบัน 120 วัน
@@ -632,7 +672,7 @@ def create_ta_chart(df, ticker, res_data):
     return fig
 
 
-# ================= 6. ฟังก์ชันวิเคราะห์หลัก (TTL 300s) =================
+# ================= 6. ฟังก์ชันวิเคราะห์หลัก (จับลักษณะแท่งเทียน 1D แม่นยำ) =================
 @st.cache_data(ttl=300)
 def check_ma_snr_combo(ticker, info_mode=False):
     try:
@@ -671,47 +711,55 @@ def check_ma_snr_combo(ticker, info_mode=False):
         if drop_8d_pct > -12: bull_score += 10
         bullish_pct = min(96.0, max(5.0, round(bull_score * 0.95 + 4.0, 1)))
 
-      # ================= จำแนก 4 สภาวะตลาดหลัก (สูตรใหม่ ปลดล็อกขาขึ้น) =================
-        # 1. ขาลงชัดเจน / โดนทุบหนัก (หลุดเส้นค่าเฉลี่ยทั้งคู่ หรือโดนทุบแรง)
-        if (not is_above_ma20 and not is_above_ma50 and latest_rsi < 48) or drop_8d_pct <= -18.0:
+        # ระยะห่างจากแนวรับที่ 1
+        dist_s1_pct = ((latest_close - s1) / s1) * 100
+
+        # ================= ตรรกะจำแนก 5 สภาวะตลาดแท้จริง (ตามแท่งเทียน 1D) =================
+        # 1. ขาลงชัดเจน / โดนทุบหนัก (หลุดเส้นค่าเฉลี่ยหลัก หรือย่อตัวลึก)
+        if (not is_above_ma20 and not is_above_ma50 and latest_rsi < 45) or drop_8d_pct <= -18.0:
             trend_status = "DOWNTREND"
             status_text = "📉 ลงแรง / ขาลงชัดเจน (ห้ามรับมีด)"
+            status_box_class = "status-banner-downtrend"
             badge_class = "badge-trend-bear"
             badge_label = f"📉 ลงแรง/ขาลง: {100.0 - bullish_pct:.1f}%"
-            status_desc = f"⚠️ หุ้นหลุดเส้นค่าเฉลี่ยหลัก (ย่อตัวจากยอด 8 วัน {drop_8d_pct:.2f}%) โครงสร้างยังเสียเปรียบ"
+            status_desc = f"⚠️ หุ้นหลุดเส้นค่าเฉลี่ยหลัก (ย่อตัวจากยอด 8 วัน {drop_8d_pct:.2f}%) โครงสร้างเสียเปรียบ ยังไม่ควรรับมีด"
 
-        # 2. ขาขึ้นแข็งแกร่ง (ยืนเหนือ MA20 & MA50 หรือยืนเหนือ MA20 พร้อมโมเมนตัม RSI)
-        elif (is_above_ma20 and is_above_ma50) or (is_above_ma20 and latest_rsi >= 48 and drop_8d_pct > -8.0):
+        # 2. ขาขึ้นแข็งแกร่ง (ราคายืนเหนือ MA20 และ MA50 หรือเด้งขึ้นมาแรงต่อเนื่อง)
+        elif (is_above_ma20 and is_above_ma50 and latest_rsi >= 48) or (is_above_ma20 and bounce_8d_pct >= 6.0):
             trend_status = "UPTREND"
             status_text = "🚀 ขาขึ้นแข็งแกร่ง (Strong Uptrend)"
+            status_box_class = "status-banner-uptrend"
             badge_class = "badge-trend-bull"
             badge_label = f"🚀 ขาขึ้นแข็งแกร่ง: {bullish_pct}%"
-            status_desc = f"✨ ราคายืนเหนือเส้นแนวโน้มหลัก โมเมนตัมขาขึ้นต่อเนื่อง (ดีดตัวจากฐานล่าสุด +{bounce_8d_pct:.2f}%)"
+            status_desc = f"✨ ราคายืนเหนือเส้นแนวโน้มหลัก โมเมนตัมขาขึ้นสมบูรณ์ (ดีดตัวจากฐานล่าสุด +{bounce_8d_pct:.2f}%)"
 
-        # 3. ย่อพักฐานในแนวโน้มขาขึ้น (ราคาอยู่เหนือ MA50 แต่ย่อลงมาทดสอบ)
-        elif is_above_ma50 and not is_above_ma20 and latest_rsi >= 40:
+        # 3. ย่อพักฐานในแนวโน้มขาขึ้น (Healthy Pullback - โครงสร้างใหญ่ยังดี แต่ย่อทดสอบแนวรับ)
+        elif is_above_ma50 and drop_8d_pct <= -4.0 and latest_rsi >= 40:
             trend_status = "PULLBACK"
             status_text = "⏳ ย่อพักฐาน (Healthy Pullback)"
+            status_box_class = "status-banner-pullback"
             badge_class = "badge-trend-pull"
             badge_label = f"⏳ ย่อพักฐาน: {bullish_pct}%"
-            status_desc = f"🔄 โครงสร้างใหญ่ยังเป็นขาขึ้น กำลังย่อตัวพักฐานตามรอบ (ย่อจากยอด 8 วัน {drop_8d_pct:.2f}%)"
+            status_desc = f"🔄 โครงสร้างใหญ่เป็นขาขึ้น กำลังย่อตัวพักฐานตามรอบ (ย่อจากยอด 8 วัน {drop_8d_pct:.2f}%) เพื่อสะสมแรง"
 
-        # 4. ช้อนแนวรับ (มีแรงเด้งสู้ที่โซนแนวรับ)
-        elif bounce_8d_pct >= 2.0 and (latest_close <= s1 * 1.06 or latest_close <= s2 * 1.06):
+        # 4. ช้อนแนวรับ (ราคาอยู่ในโซนแนวรับพอดี และเริ่มมีแรงเด้งสั้น 1-5%)
+        elif dist_s1_pct <= 4.5 and bounce_8d_pct <= 6.0 and latest_close >= s1 * 0.98:
             trend_status = "BUY_SUPPORT"
             status_text = f"🎯 ช้อนแนวรับ (เด้งจากฐาน +{bounce_8d_pct:.2f}%)"
+            status_box_class = "status-banner-support"
             badge_class = "badge-trend-support"
             badge_label = f"🎯 ช้อนแนวรับ: {bullish_pct}%"
-            status_desc = f"🛡️ ราคาแตะโซนแนวรับและเริ่มมีแรงดีดกลับตัว (+{bounce_8d_pct:.2f}%) เหมาะสะสมไม้ 1"
+            status_desc = f"🛡️ ราคาอยู่ในโซนแนวรับสำคัญและเริ่มมีแรงดีดกลับตัว (+{bounce_8d_pct:.2f}%) เหมาะสะสมไม้ 1"
 
-        # 5. สะสมแรง / ไซด์เวย์ (กรณีแกว่งแคบๆ อยู่ระหว่างเส้นค่าเฉลี่ย)
+        # 5. สะสมแรง / ไซด์เวย์ (แกว่งในกรอบแคบ)
         else:
             trend_status = "SIDEWAYS"
             status_text = "〰️ สะสมแรง / ไซด์เวย์"
+            status_box_class = "status-banner-sideways"
             badge_class = "badge-trend-side"
             badge_label = f"〰️ สะสมแรง/ไซด์เวย์: {bullish_pct}%"
-            status_desc = f"📦 ราคาแกว่งตัวสร้างฐานในกรอบแคบ รอเบรกเอาท์เพื่อเลือกทิศทาง"
-            
+            status_desc = f"📦 ราคาแกว่งตัวสร้างฐานในกรอบแคบ ยังไม่มีทิศทางชัดเจน รอการเบรกเอาท์"
+
         dist_from_sup = ((latest_close - s1) / s1) * 100
         pat_name, pat_score = calculate_ai_pattern_match(df.tail(60))
         vol_val = df['volume'].iloc[-1] if 'volume' in df.columns else 0
@@ -735,6 +783,7 @@ def check_ma_snr_combo(ticker, info_mode=False):
             'bullish_pct': bullish_pct,
             'trend_status': trend_status,
             'status_text': status_text,
+            'status_box_class': status_box_class,
             'badge_label': badge_label,
             'badge_class': badge_class,
             'status_desc': status_desc,
@@ -777,20 +826,18 @@ with tab1:
                 company_full_name = res.get("longNameEn", single_ticker)
                 sector_desc = res.get("sectorTh", "N/A")
                 industry_desc = res.get("industryTh", "N/A")
-                t_status = res.get("trend_status", "SIDEWAYS")
 
                 st.markdown(f'<p class="company-header">{single_ticker} : {company_full_name}</p>', unsafe_allow_html=True)
                 st.markdown(f'<div class="sector-badge">🏷️ กลุ่มธุรกิจ: {sector_desc} | ย่อย: {industry_desc}</div>', unsafe_allow_html=True)
                 
-                # แสดงผลสถานะแนวโน้ม
-                if t_status in ["UPTREND", "BUY_SUPPORT"]:
-                    st.success(f"{res.get('status_text', '')}\n\n{res.get('status_desc', '')} | ณ วันที่: {res.get('Date', '')}")
-                elif t_status == "PULLBACK":
-                    st.warning(f"{res.get('status_text', '')}\n\n{res.get('status_desc', '')} | ณ วันที่: {res.get('Date', '')}")
-                elif t_status == "SIDEWAYS":
-                    st.info(f"{res.get('status_text', '')}\n\n{res.get('status_desc', '')} | ณ วันที่: {res.get('Date', '')}")
-                else:
-                    st.error(f"{res.get('status_text', '')}\n\n{res.get('status_desc', '')} | ณ วันที่: {res.get('Date', '')}")
+                # แสดงผลแถบสถานะพร้อมเปลี่ยนสีพื้นหลังตามสถานะ 5 สภาวะ
+                box_css = res.get('status_box_class', 'status-banner-sideways')
+                st.markdown(f"""
+                <div class="status-banner {box_css}">
+                    <div class="status-title-text">{res.get('status_text', '')}</div>
+                    <div class="status-desc-text">{res.get('status_desc', '')} | ข้อมูล ณ วันที่: {res.get('Date', '')}</div>
+                </div>
+                """, unsafe_allow_html=True)
 
                 # ปุ่ม Watchlist
                 if single_ticker not in st.session_state.watchlist:
