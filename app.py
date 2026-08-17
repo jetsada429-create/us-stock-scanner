@@ -34,7 +34,7 @@ UI_LANG_MAP = {
     'btn_scan_market': "🚀 เริ่มสแกนตลาด",
     'status_preparing_tickers': "⏳ กำลังดึงรายชื่อหุ้นผู้นำตลาด (S&P 500, NASDAQ 100, Growth)...",
     'status_scanning': "⏳ สแกนไปแล้ว {count}/{total} ตัว (พบหุ้นทรงสวย {found} ตัว)...",
-    'status_analyzing_single': "⏳ กำลังประมวลผลความเร็วสูง {ticker}...",
+    'status_analyzing_single': "⏳ กำลังดึงข้อมูลสดและวิเคราะห์ {ticker}...",
     'expander_business_summary': "📖 สรุปธุรกิจ & โครงสร้างผู้ถือหุ้น (แปลไทยอัตโนมัติ)",
     'chart_title_single': "📈 กราฟเทคนิค 3 แนวรับ และ 4 ระดับแนวต้าน",
     'analysis_title': "📊 ข้อมูลแนวรับ - แนวต้าน & ตัวชี้วัดสำคัญ",
@@ -609,7 +609,7 @@ def get_time_elapsed_thai(last_dt):
 
 def translate_text_to_thai(text):
     if not text or text == 'N/A' or not str(text).strip(): return ''
-    text_sample = str(text)[:350] # แปลเนื้อหาความยาวพอเหมาะเพื่อความเร็วสูงสุด
+    text_sample = str(text)[:350]
     try:
         url = "https://translate.googleapis.com/translate_a/single"
         params = {"client": "gtx", "sl": "en", "tl": "th", "dt": "t", "q": text_sample}
@@ -623,7 +623,6 @@ def translate_text_to_thai(text):
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_company_info_and_holders(ticker):
     try:
-        # ใช้ Yahoo Summary Profile API โดยตรงเพื่อความเร็วสูง ไม่ผ่าน .info
         headers = {'User-Agent': 'Mozilla/5.0'}
         url = f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{ticker}?modules=assetProfile,defaultKeyStatistics"
         r = requests.get(url, headers=headers, timeout=3.0)
@@ -860,6 +859,17 @@ def check_ma_snr_combo(item_input, info_mode=False):
             'drop_8d_pct': f'{drop_8d_pct:.2f}%',
             'bounce_8d_pct': f'+{bounce_8d_pct:.2f}%'
         }
+
+        if info_mode or hint_sector == 'US Market':
+            co_info = get_company_info_and_holders(ticker)
+            if co_info.get('longNameEn') and co_info['longNameEn'] != ticker:
+                res_data['longNameEn'] = co_info['longNameEn']
+            if co_info.get('sectorTh') and co_info['sectorTh'] != 'N/A':
+                res_data['sectorTh'] = co_info['sectorTh']
+            if co_info.get('industryTh') and co_info['industryTh'] != 'N/A':
+                res_data['industryTh'] = co_info['industryTh']
+            res_data['summaryTh'] = co_info.get('summaryTh', 'N/A')
+            res_data.update(co_info)
 
         if not info_mode:
             if not (trend_status in ["UPTREND", "PULLBACK", "BUY_SUPPORT"]):
@@ -1111,7 +1121,7 @@ with tab1:
                 st.error(f"❌ ไม่พบข้อมูลสัญลักษณ์หุ้น **{single_ticker}** ในระบบ กรุณาตรวจสอบชื่อ Ticker อีกครั้ง")
 
 
-# --- TAB 2: สแกนคัดหุ้นทั้งตลาด (พร้อมชื่อเต็ม, กลุ่มธุรกิจ และลักษณะการทำธุรกิจ) ---
+# --- TAB 2: สแกนคัดหุ้นทั้งตลาด ---
 with tab2:
     st.markdown("### 🚀 สแกนหาหุ้นทรงสวยประจำวัน (NASDAQ, NYSE, AMEX)")
     
@@ -1190,25 +1200,18 @@ with tab2:
         server_state["latest_results"] = results
         server_state["last_scanned_dt"] = datetime.now()
         server_state["last_scanned_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # --- เปลี่ยนส่วนนี้ใน TAB 2: สแกนคัดหุ้นทั้งตลาด ---
         if results:
-            # สร้างตารางข้อมูลด้วยวิธีที่ปลอดภัยจาก KeyError
             all_res_data = [item['res_data'] for item in results]
             df_result_display = pd.DataFrame(all_res_data)
-            
-            # กำหนดคอลัมน์ที่ต้องการโชว์ (เลือกเฉพาะที่มีอยู่จริง)
             cols_to_show = [
                 'Ticker', 'longNameEn', 'Exchange', 'sectorTh', 'Price ($)', 'status_text', 
                 'pattern_name', 'Support 1 ($)', 'Support 2 ($)', 'Support 3 ($)', 'RSI', 
                 'Resist 1 ($)', 'Resist 2 ($)', 'Resist 3 ($)', 'Resist 4 ($)', 
                 'Volume', 'Date'
             ]
-            # กรองเฉพาะคอลัมน์ที่มีในข้อมูล
             available_cols = [c for c in cols_to_show if c in df_result_display.columns]
             server_state["latest_df"] = df_result_display[available_cols]
         st.rerun()
-
-  
 
     # ================= แสดงผลลัพธ์พร้อมระบบกรองตลาด (Filter Toolbar) =================
     if server_state["latest_results"]:
@@ -1325,15 +1328,21 @@ with tab2:
         
         st.markdown("#### 📊 ตารางสรุปสัญญาณราคาหุ้นทรงสวยประจำวัน")
         if filtered_results:
-            df_display_filtered = pd.DataFrame([item['res_data'] for item in filtered_results])[[
-                'Ticker', 'longNameEn', 'Exchange', 'sectorTh', 'Price ($)', 'status_text', 'pattern_name', 'Support 1 ($)', 'Support 2 ($)', 'Support 3 ($)', 'RSI', 
+            all_res_filtered = [item['res_data'] for item in filtered_results]
+            df_display_filtered = pd.DataFrame(all_res_filtered)
+            cols_to_show = [
+                'Ticker', 'longNameEn', 'Exchange', 'sectorTh', 'Price ($)', 'status_text', 
+                'pattern_name', 'Support 1 ($)', 'Support 2 ($)', 'Support 3 ($)', 'RSI', 
                 'Resist 1 ($)', 'Resist 2 ($)', 'Resist 3 ($)', 'Resist 4 ($)', 
                 'Volume', 'Date'
-            ]]
-            st.dataframe(df_display_filtered, use_container_width=True, hide_index=True, height=220)
+            ]
+            available_cols = [c for c in cols_to_show if c in df_display_filtered.columns]
+            df_final_show = df_display_filtered[available_cols]
+
+            st.dataframe(df_final_show, use_container_width=True, hide_index=True, height=220)
             st.download_button(
                 label='📥 ดาวน์โหลด Watchlist รายการที่กรอง (CSV)',
-                data=df_display_filtered.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig'),
+                data=df_final_show.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig'),
                 file_name=f'us_watchlist_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv',
                 key="btn_download_csv"
             )
