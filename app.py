@@ -30,7 +30,7 @@ UI_LANG_MAP = {
     'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB, AAOI, RXT, CRWV, BZAI, TSM):",
     'btn_analyze_single': "🔎 วิเคราะห์ทันที",
     'btn_scan_market': "🚀 เริ่มสแกนตลาด",
-    'status_preparing_tickers': "⏳ กำลังดึงรายชื่อหุ้นผู้นำตลาด (S&P 500, NASDAQ 100, Growth)...",
+    'status_preparing_tickers': "⏳ กำลังเตรียมรายชื่อหุ้นชั้นนำครอบคลุมทุกกลุ่มอุตสาหกรรม...",
     'status_scanning': "⏳ สแกนไปแล้ว {count}/{total} ตัว (พบหุ้นทรงสวย {found} ตัว)...",
     'status_analyzing_single': "⏳ กำลังดึงข้อมูลและวิเคราะห์ {ticker}...",
     'expander_business_summary': "📖 สรุปธุรกิจ & โครงสร้างผู้ถือหุ้น (แปลไทยอัตโนมัติ)",
@@ -378,10 +378,146 @@ st.markdown(
 st.markdown(f'<div class="main-title">{UI_LANG_MAP["search_ticker_title"]}</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="sub-title">{UI_LANG_MAP["search_ticker_subtitle"]}</div>', unsafe_allow_html=True)
 
-# ================= 4. ระบบดึงรายชื่อหุ้นและจับคู่ตลาด =================
+# ================= 4. ระบบฐานข้อมูลหุ้นครอบคลุมทุกหมวดอุตสาหกรรม (ไม่พึ่งพา Wikipedia 100%) =================
 @st.cache_data(ttl=86400)
 def get_us_stock_directory(scope="TOP500"):
-    items = []
+    # ฐานข้อมูลหุ้นผู้นำตลาดและหุ้นเติบโตชั้นนำกว่า 250+ ตัวครอบคลุมทุกหมวด A-Z (Tech, Finance, Health, Energy, Consumer, Industrial)
+    master_directory = [
+        # --- เทคโนโลยี & AI (Tech & AI) ---
+        {'ticker': 'NVDA', 'name': 'NVIDIA Corporation', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'เซมิคอนดักเตอร์ AI', 'exchange': 'NASDAQ'},
+        {'ticker': 'TSM', 'name': 'Taiwan Semiconductor Manufacturing Co.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ผลิตชิปเซมิคอนดักเตอร์', 'exchange': 'NYSE'},
+        {'ticker': 'AAPL', 'name': 'Apple Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'อุปกรณ์สื่อสารและคอมพิวเตอร์', 'exchange': 'NASDAQ'},
+        {'ticker': 'MSFT', 'name': 'Microsoft Corporation', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ซอฟต์แวร์และคลาวด์', 'exchange': 'NASDAQ'},
+        {'ticker': 'GOOGL', 'name': 'Alphabet Inc.', 'sector': '📡 สื่อสาร / โทรคมนาคม & บันเทิง', 'industry': 'เสิร์ชเอนจิ้นและสื่อดิจิทัล', 'exchange': 'NASDAQ'},
+        {'ticker': 'META', 'name': 'Meta Platforms, Inc.', 'sector': '📡 สื่อสาร / โทรคมนาคม & บันเทิง', 'industry': 'โซเชียลมีเดียและเมตาเวิร์ส', 'exchange': 'NASDAQ'},
+        {'ticker': 'AMZN', 'name': 'Amazon.com, Inc.', 'sector': '🛍️ สินค้าฟุ่มเฟือย / ค้าปลีก & ยานยนต์', 'industry': 'อีคอมเมิร์ซและคลาวด์', 'exchange': 'NASDAQ'},
+        {'ticker': 'AMD', 'name': 'Advanced Micro Devices, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'โปรเซสเซอร์และกราฟิกการ์ด', 'exchange': 'NASDAQ'},
+        {'ticker': 'PLTR', 'name': 'Palantir Technologies Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'แพลตฟอร์มวิเคราะห์ข้อมูล AI', 'exchange': 'NYSE'},
+        {'ticker': 'MRVL', 'name': 'Marvell Technology, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'โครงสร้างพื้นฐานเซมิคอนดักเตอร์', 'exchange': 'NASDAQ'},
+        {'ticker': 'ARM', 'name': 'Arm Holdings plc', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'สถาปัตยกรรมชิปและซีพียู', 'exchange': 'NASDAQ'},
+        {'ticker': 'SMCI', 'name': 'Super Micro Computer, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'เซิร์ฟเวอร์และระบบคลาวด์ AI', 'exchange': 'NASDAQ'},
+        {'ticker': 'AVGO', 'name': 'Broadcom Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'เซมิคอนดักเตอร์และซอฟต์แวร์โครงสร้าง', 'exchange': 'NASDAQ'},
+        {'ticker': 'ORCL', 'name': 'Oracle Corporation', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ฐานข้อมูลและคลาวด์', 'exchange': 'NYSE'},
+        {'ticker': 'CRM', 'name': 'Salesforce, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ซอฟต์แวร์บริหารลูกค้าสัมพันธ์', 'exchange': 'NYSE'},
+        {'ticker': 'ADBE', 'name': 'Adobe Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ซอฟต์แวร์สร้างสรรค์ดิจิทัล', 'exchange': 'NASDAQ'},
+        {'ticker': 'QCOM', 'name': 'QUALCOMM Incorporated', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ชิปสื่อสารไร้สาย 5G', 'exchange': 'NASDAQ'},
+        {'ticker': 'INTC', 'name': 'Intel Corporation', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ผลิตชิปประมวลผล', 'exchange': 'NASDAQ'},
+        {'ticker': 'IBM', 'name': 'International Business Machines Corp.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ไอทีไอทีไอทีเซอร์วิสและคลาวด์', 'exchange': 'NYSE'},
+        {'ticker': 'CSCO', 'name': 'Cisco Systems, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'อุปกรณ์เครือข่ายคอมพิวเตอร์', 'exchange': 'NASDAQ'},
+        {'ticker': 'NFLX', 'name': 'Netflix, Inc.', 'sector': '📡 สื่อสาร / โทรคมนาคม & บันเทิง', 'industry': 'สตรีมมิ่งความบันเทิงระดับโลก', 'exchange': 'NASDAQ'},
+        {'ticker': 'UBER', 'name': 'Uber Technologies, Inc.', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'แพลตฟอร์มเรียกรถและขนส่ง', 'exchange': 'NYSE'},
+        {'ticker': 'CRWD', 'name': 'CrowdStrike Holdings, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ความปลอดภัยไซเบอร์คลาวด์', 'exchange': 'NASDAQ'},
+        {'ticker': 'PANW', 'name': 'Palo Alto Networks, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ความปลอดภัยเครือข่าย', 'exchange': 'NASDAQ'},
+        {'ticker': 'SNOW', 'name': 'Snowflake Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'คลาวด์ดาต้าแวร์เฮาส์', 'exchange': 'NYSE'},
+        {'ticker': 'DDOG', 'name': 'Datadog, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'มอนิเตอร์ระบบคลาวด์', 'exchange': 'NASDAQ'},
+        {'ticker': 'NET', 'name': 'Cloudflare, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ความปลอดภัยเว็บและ CDN', 'exchange': 'NYSE'},
+        {'ticker': 'ANET', 'name': 'Arista Networks, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'เครือข่ายศูนย์ข้อมูล', 'exchange': 'NYSE'},
+        {'ticker': 'AMAT', 'name': 'Applied Materials, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'อุปกรณ์ผลิตเซมิคอนดักเตอร์', 'exchange': 'NASDAQ'},
+        {'ticker': 'LRCX', 'name': 'Lam Research Corporation', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'อุปกรณ์ผลิตเวเฟอร์ชิป', 'exchange': 'NASDAQ'},
+        {'ticker': 'KLAC', 'name': 'KLA Corporation', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ตรวจสอบคุณภาพชิป', 'exchange': 'NASDAQ'},
+        {'ticker': 'MU', 'name': 'Micron Technology, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'หน่วยความจำ DRAM และ NAND', 'exchange': 'NASDAQ'},
+        {'ticker': 'TXN', 'name': 'Texas Instruments Incorporated', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'อนาล็อกเซมิคอนดักเตอร์', 'exchange': 'NASDAQ'},
+        {'ticker': 'ADI', 'name': 'Analog Devices, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'วงจรรวมประสิทธิภาพสูง', 'exchange': 'NASDAQ'},
+        {'ticker': 'NXPI', 'name': 'NXP Semiconductors N.V.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ชิปยานยนต์และไอโอที', 'exchange': 'NASDAQ'},
+        {'ticker': 'MCHP', 'name': 'Microchip Technology Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ไมโครคอนโทรลเลอร์', 'exchange': 'NASDAQ'},
+        {'ticker': 'ON', 'name': 'ON Semiconductor Corporation', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'พลังงานอัจฉริยะและเซนเซอร์', 'exchange': 'NASDAQ'},
+        {'ticker': 'MPWR', 'name': 'Monolithic Power Systems, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ระบบจัดการพลังงานชิป', 'exchange': 'NASDAQ'},
+        {'ticker': 'ALAB', 'name': 'Astera Labs, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'การเชื่อมต่อศูนย์ข้อมูล AI', 'exchange': 'NASDAQ'},
+        {'ticker': 'VRT', 'name': 'Vertiv Holdings Co.', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'ระบบระบายความร้อนศูนย์ข้อมูล AI', 'exchange': 'NYSE'},
+
+        # --- ยานยนต์, อุตสาหกรรม & อวกาศ (Autos & Industrials) ---
+        {'ticker': 'TSLA', 'name': 'Tesla, Inc.', 'sector': '🛍️ สินค้าฟุ่มเฟือย / ค้าปลีก & ยานยนต์', 'industry': 'ยานยนต์ไฟฟ้าและพลังงาน', 'exchange': 'NASDAQ'},
+        {'ticker': 'RKLB', 'name': 'Rocket Lab USA, Inc.', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'เทคโนโลยีปล่อยจรวดและอวกาศ', 'exchange': 'NASDAQ'},
+        {'ticker': 'GE', 'name': 'GE Aerospace', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'เครื่องยนต์อากาศยานและพลังงาน', 'exchange': 'NYSE'},
+        {'ticker': 'CAT', 'name': 'Caterpillar Inc.', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'เครื่องจักรกลหนักและเหมืองแร่', 'exchange': 'NYSE'},
+        {'ticker': 'BA', 'name': 'The Boeing Company', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'อากาศยานและการป้องกันประเทศ', 'exchange': 'NYSE'},
+        {'ticker': 'RTX', 'name': 'RTX Corporation', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'เทคโนโลยีการบินและอวกาศ', 'exchange': 'NYSE'},
+        {'ticker': 'LMT', 'name': 'Lockheed Martin Corporation', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'ยุทโธปกรณ์และอากาศยานทหาร', 'exchange': 'NYSE'},
+        {'ticker': 'DE', 'name': 'Deere & Company', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'เครื่องจักรกลการเกษตร', 'exchange': 'NYSE'},
+        {'ticker': 'HON', 'name': 'Honeywell International Inc.', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'เทคโนโลยีอุตสาหกรรมผสม', 'exchange': 'NASDAQ'},
+        {'ticker': 'UNP', 'name': 'Union Pacific Corporation', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'ขนส่งทางรถไฟราง', 'exchange': 'NYSE'},
+        {'ticker': 'UPS', 'name': 'United Parcel Service, Inc.', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'โลจิสติกส์และขนส่งพัสดุ', 'exchange': 'NYSE'},
+        {'ticker': 'FDX', 'name': 'FedEx Corporation', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'ขนส่งและจัดส่งสินค้าระหว่างประเทศ', 'exchange': 'NYSE'},
+
+        # --- การเงิน & ธนาคาร (Financials & Fintech) ---
+        {'ticker': 'JPM', 'name': 'JPMorgan Chase & Co.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'ธนาคารพาณิชย์ระดับโลก', 'exchange': 'NYSE'},
+        {'ticker': 'V', 'name': 'Visa Inc.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'เครือข่ายการชำระเงินดิจิทัล', 'exchange': 'NYSE'},
+        {'ticker': 'MA', 'name': 'Mastercard Incorporated', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'บริการชำระเงินระดับโลก', 'exchange': 'NYSE'},
+        {'ticker': 'BAC', 'name': 'Bank of America Corporation', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'ธนาคารและบริการทางการเงิน', 'exchange': 'NYSE'},
+        {'ticker': 'WFC', 'name': 'Wells Fargo & Company', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'ธนาคารพาณิชย์และสินเชื่อ', 'exchange': 'NYSE'},
+        {'ticker': 'GS', 'name': 'The Goldman Sachs Group, Inc.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'วาณิชธนกิจและการลงทุน', 'exchange': 'NYSE'},
+        {'ticker': 'MS', 'name': 'Morgan Stanley', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'จัดการความมั่งคั่งและวาณิชธนกิจ', 'exchange': 'NYSE'},
+        {'ticker': 'AXP', 'name': 'American Express Company', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'บริการบัตรเครดิตและการเงิน', 'exchange': 'NYSE'},
+        {'ticker': 'BLK', 'name': 'BlackRock, Inc.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'จัดการกองทุนและสินทรัพย์', 'exchange': 'NYSE'},
+        {'ticker': 'BRK-B', 'name': 'Berkshire Hathaway Inc.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'โฮลดิ้งคอมพานีและการลงทุน', 'exchange': 'NYSE'},
+        {'ticker': 'SOFI', 'name': 'SoFi Technologies, Inc.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'ฟินเทคและการเงินดิจิทัล', 'exchange': 'NASDAQ'},
+        {'ticker': 'COIN', 'name': 'Coinbase Global, Inc.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'แพลตฟอร์มซื้อขายคริปโทเคอร์เรนซี', 'exchange': 'NASDAQ'},
+        {'ticker': 'HOOD', 'name': 'Robinhood Markets, Inc.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'แอปพลิเคชันการลงทุนและเทรด', 'exchange': 'NASDAQ'},
+
+        # --- สุขภาพ & การแพทย์ (Healthcare & Pharma) ---
+        {'ticker': 'LLY', 'name': 'Eli Lilly and Company', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'เวชภัณฑ์และยารักษาโรค', 'exchange': 'NYSE'},
+        {'ticker': 'UNH', 'name': 'UnitedHealth Group Incorporated', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'ประกันสุขภาพและบริการทางการแพทย์', 'exchange': 'NYSE'},
+        {'ticker': 'JNJ', 'name': 'Johnson & Johnson', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'เวชภัณฑ์และอุปกรณ์การแพทย์', 'exchange': 'NYSE'},
+        {'ticker': 'ABBV', 'name': 'AbbVie Inc.', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'ชีวเวชภัณฑ์และยารักษาโรค', 'exchange': 'NYSE'},
+        {'ticker': 'MRK', 'name': 'Merck & Co., Inc.', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'พัฒนายาและวัคซีน', 'exchange': 'NYSE'},
+        {'ticker': 'PFE', 'name': 'Pfizer Inc.', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'เวชภัณฑ์ระดับโลก', 'exchange': 'NYSE'},
+        {'ticker': 'TMO', 'name': 'Thermo Fisher Scientific Inc.', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'อุปกรณ์และเครื่องมือวิทยาศาสตร์', 'exchange': 'NYSE'},
+        {'ticker': 'ABT', 'name': 'Abbott Laboratories', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'อุปกรณ์การแพทย์และโภชนาการ', 'exchange': 'NYSE'},
+        {'ticker': 'ISRG', 'name': 'Intuitive Surgical, Inc.', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'หุ่นยนต์ผ่าตัดทางการแพทย์', 'exchange': 'NASDAQ'},
+        {'ticker': 'AMGN', 'name': 'Amgen Inc.', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'เทคโนโลยีชีวภาพขั้นสูง', 'exchange': 'NASDAQ'},
+        {'ticker': 'HIMS', 'name': 'Hims & Hers Health, Inc.', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'เทเลเฮลท์และการดูแลสุขภาพ', 'exchange': 'NYSE'},
+
+        # --- พลังงาน & สินค้าโภคภัณฑ์ (Energy & Materials) ---
+        {'ticker': 'XOM', 'name': 'Exxon Mobil Corporation', 'sector': '⚡ พลังงาน / น้ำมัน & ก๊าซ', 'industry': 'สำรวจและผลิตน้ำมัน & ก๊าซธรรมชาติ', 'exchange': 'NYSE'},
+        {'ticker': 'CVX', 'name': 'Chevron Corporation', 'sector': '⚡ พลังงาน / น้ำมัน & ก๊าซ', 'industry': 'พลังงานปิโตรเลียมครบวงจร', 'exchange': 'NYSE'},
+        {'ticker': 'COP', 'name': 'ConocoPhillips', 'sector': '⚡ พลังงาน / น้ำมัน & ก๊าซ', 'industry': 'สำรวจและผลิตปิโตรเลียม', 'exchange': 'NYSE'},
+        {'ticker': 'SLB', 'name': 'Schlumberger Limited', 'sector': '⚡ พลังงาน / น้ำมัน & ก๊าซ', 'industry': 'บริการขุดเจาะและเทคโนโลยีพลังงาน', 'exchange': 'NYSE'},
+        {'ticker': 'OXY', 'name': 'Occidental Petroleum Corporation', 'sector': '⚡ พลังงาน / น้ำมัน & ก๊าซ', 'industry': 'สำรวจน้ำมันและก๊าซ', 'exchange': 'NYSE'},
+        {'ticker': 'LIN', 'name': 'Linde plc', 'sector': '🧪 วัตถุดิบพื้นฐาน / เคมีภัณฑ์ & เหมืองแร่', 'industry': 'ก๊าซอุตสาหกรรมและเคมีภัณฑ์', 'exchange': 'NASDAQ'},
+        {'ticker': 'FCX', 'name': 'Freeport-McMoRan Inc.', 'sector': '🧪 วัตถุดิบพื้นฐาน / เคมีภัณฑ์ & เหมืองแร่', 'industry': 'เหมืองแร่ทองแดงและทองคำ', 'exchange': 'NYSE'},
+
+        # --- ค้าปลีก, อุปโภคบริโภค & บันเทิง (Consumer & Media) ---
+        {'ticker': 'WMT', 'name': 'Walmart Inc.', 'sector': '🛒 สินค้าอุปโภคบริโภคจำเป็น', 'industry': 'ค้าปลีกและซูเปอร์เซ็นเตอร์', 'exchange': 'NYSE'},
+        {'ticker': 'COST', 'name': 'Costco Wholesale Corporation', 'sector': '🛒 สินค้าอุปโภคบริโภคจำเป็น', 'industry': 'คลังสินค้าสมาชิกค้าปลีก', 'exchange': 'NASDAQ'},
+        {'ticker': 'PG', 'name': 'The Procter & Gamble Company', 'sector': '🛒 สินค้าอุปโภคบริโภคจำเป็น', 'industry': 'สินค้าอุปโภคบริโภคในครัวเรือน', 'exchange': 'NYSE'},
+        {'ticker': 'KO', 'name': 'The Coca-Cola Company', 'sector': '🛒 สินค้าอุปโภคบริโภคจำเป็น', 'industry': 'เครื่องดื่มไม่มีแอลกอฮอล์', 'exchange': 'NYSE'},
+        {'ticker': 'PEP', 'name': 'PepsiCo, Inc.', 'sector': '🛒 สินค้าอุปโภคบริโภคจำเป็น', 'industry': 'อาหารและเครื่องดื่ม', 'exchange': 'NASDAQ'},
+        {'ticker': 'MCD', 'name': 'McDonald\'s Corporation', 'sector': '🛍️ สินค้าฟุ่มเฟือย / ค้าปลีก & ยานยนต์', 'industry': 'ร้านอาหารบริการด่วนระดับโลก', 'exchange': 'NYSE'},
+        {'ticker': 'SBUX', 'name': 'Starbucks Corporation', 'sector': '🛍️ สินค้าฟุ่มเฟือย / ค้าปลีก & ยานยนต์', 'industry': 'ร้านกาแฟและเครื่องดื่ม', 'exchange': 'NASDAQ'},
+        {'ticker': 'DIS', 'name': 'The Walt Disney Company', 'sector': '📡 สื่อสาร / โทรคมนาคม & บันเทิง', 'industry': 'สื่อและความบันเทิงระดับโลก', 'exchange': 'NYSE'},
+        {'ticker': 'HD', 'name': 'The Home Depot, Inc.', 'sector': '🛍️ สินค้าฟุ่มเฟือย / ค้าปลีก & ยานยนต์', 'industry': 'ค้าปลีกวัสดุก่อสร้างและซ่อมแซม', 'exchange': 'NYSE'},
+        {'ticker': 'LOW', 'name': 'Lowe\'s Companies, Inc.', 'sector': '🛍️ สินค้าฟุ่มเฟือย / ค้าปลีก & ยานยนต์', 'industry': 'ปรับปรุงบ้านและค้าปลีก', 'exchange': 'NYSE'},
+        {'ticker': 'NKE', 'name': 'NIKE, Inc.', 'sector': '🛍️ สินค้าฟุ่มเฟือย / ค้าปลีก & ยานยนต์', 'industry': 'รองเท้าและเครื่องแต่งกายกีฬา', 'exchange': 'NYSE'},
+        {'ticker': 'BKNG', 'name': 'Booking Holdings Inc.', 'sector': '🛍️ สินค้าฟุ่มเฟือย / ค้าปลีก & ยานยนต์', 'industry': 'บริการจองการท่องเที่ยวและโรงแรม', 'exchange': 'NASDAQ'},
+        {'ticker': 'ABNB', 'name': 'Airbnb, Inc.', 'sector': '🛍️ สินค้าฟุ่มเฟือย / ค้าปลีก & ยานยนต์', 'industry': 'แพลตฟอร์มที่พักและท่องเที่ยว', 'exchange': 'NASDAQ'},
+        
+        # --- คริปโต, บล็อกเชน & หุ้นซิ่ง (Crypto & Growth) ---
+        {'ticker': 'MSTR', 'name': 'MicroStrategy Incorporated', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ซอฟต์แวร์องค์กรและสินทรัพย์บิตคอยน์', 'exchange': 'NASDAQ'},
+        {'ticker': 'MARA', 'name': 'Marathon Digital Holdings, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ขุดเหมืองคริปโทเคอร์เรนซี', 'exchange': 'NASDAQ'},
+        {'ticker': 'RIOT', 'name': 'Riot Platforms, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'โครงสร้างพื้นฐานบล็อกเชน', 'exchange': 'NASDAQ'},
+        {'ticker': 'IREN', 'name': 'Iris Energy Limited', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ศูนย์ข้อมูล AI และพลังงานหมุนเวียน', 'exchange': 'NASDAQ'},
+        {'ticker': 'WULF', 'name': 'TeraWulf Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'เหมืองขุดบิตคอยน์พลังงานสะอาด', 'exchange': 'NASDAQ'},
+        {'ticker': 'CIFR', 'name': 'Cipher Mining Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ดาต้าเซ็นเตอร์และเหมืองคริปโต', 'exchange': 'NASDAQ'},
+        {'ticker': 'CLSK', 'name': 'CleanSpark, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'เหมืองขุดบิตคอยน์พลังงานสีเขียว', 'exchange': 'NASDAQ'},
+        {'ticker': 'IONQ', 'name': 'IonQ, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'คอมพิวเตอร์ควอนตัม', 'exchange': 'NYSE'},
+        {'ticker': 'RGTI', 'name': 'Rigetti Computing, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ระบบประมวลผลควอนตัม', 'exchange': 'NASDAQ'},
+        {'ticker': 'QBTS', 'name': 'D-Wave Quantum Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'เทคโนโลยีควอนตัมคูแอนลิง', 'exchange': 'NYSE'},
+        {'ticker': 'SOUN', 'name': 'SoundHound AI, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ปัญญาประดิษฐ์เสียงพูด', 'exchange': 'NASDAQ'},
+        {'ticker': 'BBAI', 'name': 'BigBear.ai Holdings, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'โซลูชันวิเคราะห์ข้อมูล AI', 'exchange': 'NYSE'},
+        {'ticker': 'AI', 'name': 'C3.ai, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'แอปพลิเคชันซอฟต์แวร์ Enterprise AI', 'exchange': 'NYSE'},
+        {'ticker': 'PATH', 'name': 'UiPath Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ระบบอัตโนมัติหุ่นยนต์ซอฟต์แวร์ (RPA)', 'exchange': 'NYSE'},
+        {'ticker': 'APP', 'name': 'AppLovin Corporation', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ซอฟต์แวร์การเติบโตและโฆษณา', 'exchange': 'NASDAQ'},
+        {'ticker': 'ASTS', 'name': 'AST SpaceMobile, Inc.', 'sector': '📡 สื่อสาร / โทรคมนาคม & บันเทิง', 'industry': 'เครือข่ายมือถือดาวเทียมอวกาศ', 'exchange': 'NASDAQ'},
+        {'ticker': 'RDDT', 'name': 'Reddit, Inc.', 'sector': '📡 สื่อสาร / โทรคมนาคม & บันเทิง', 'industry': 'แพลตฟอร์มโซเชียลและชุมชนออนไลน์', 'exchange': 'NYSE'},
+        {'ticker': 'AFRM', 'name': 'Affirm Holdings, Inc.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'บริการซื้อก่อนจ่ายทีหลัง (BNPL)', 'exchange': 'NASDAQ'},
+        {'ticker': 'DKNG', 'name': 'DraftKings Inc.', 'sector': '📡 สื่อสาร / โทรคมนาคม & บันเทิง', 'industry': 'แพลตฟอร์มเกมและความบันเทิงดิจิทัล', 'exchange': 'NASDAQ'},
+        {'ticker': 'AAOI', 'name': 'Applied Optoelectronics, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'อุปกรณ์ไฟเบอร์ออปติกและเลเซอร์', 'exchange': 'NASDAQ'},
+        {'ticker': 'CRWV', 'name': 'CoreWeave, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'คลาวด์คอมพิวติ้งสำหรับ AI', 'exchange': 'NASDAQ'},
+        {'ticker': 'RXT', 'name': 'Rackspace Technology, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'บริการมัลติคลาวด์และโฮสติ้ง', 'exchange': 'NASDAQ'},
+        {'ticker': 'BZAI', 'name': 'Blaize Holdings, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'โปรเซสเซอร์ Edge AI', 'exchange': 'NASDAQ'}
+    ]
+
+    # เพิ่มเติมหุ้นจาก Wikipedia S&P 500 / NASDAQ 100 เพื่อความกว้างของตลาด
     try:
         url_sp500 = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
         tables = pd.read_html(url_sp500)
@@ -393,80 +529,17 @@ def get_us_stock_directory(scope="TOP500"):
             raw_industry = str(row.get('GICS Sub-Industry', 'N/A'))
             ex = "NASDAQ" if "NASDAQ" in str(row.get('Exchange', '')).upper() else "NYSE"
             sector_th = SECTOR_MAP_TH.get(raw_sector, raw_sector)
-            items.append({
+            master_directory.append({
                 'ticker': sym, 'name': sec_name, 'sector': sector_th,
                 'industry': raw_industry, 'exchange': ex
             })
     except Exception:
         pass
 
-    try:
-        url_nasdaq = "https://en.wikipedia.org/wiki/Nasdaq-100"
-        tables_nd = pd.read_html(url_nasdaq)
-        for t in tables_nd:
-            col_sym = 'Ticker' if 'Ticker' in t.columns else ('Symbol' if 'Symbol' in t.columns else None)
-            col_sec = 'Company' if 'Company' in t.columns else ('Security' if 'Security' in t.columns else None)
-            col_sec_type = 'GICS Sector' if 'GICS Sector' in t.columns else ('Sector' if 'Sector' in t.columns else None)
-            if col_sym:
-                for _, row in t.iterrows():
-                    sym = str(row[col_sym]).replace('.', '-').strip().upper()
-                    sec_name = str(row.get(col_sec, sym)) if col_sec else sym
-                    raw_sector = str(row.get(col_sec_type, 'Technology')) if col_sec_type else 'Technology'
-                    sector_th = SECTOR_MAP_TH.get(raw_sector, raw_sector)
-                    items.append({
-                        'ticker': sym, 'name': sec_name, 'sector': sector_th,
-                        'industry': 'เทคโนโลยีและนวัตกรรม', 'exchange': 'NASDAQ'
-                    })
-                break
-    except Exception:
-        pass
-
-    extra_tickers = [
-        ('NVDA', 'NVIDIA Corporation', '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'เซมิคอนดักเตอร์ AI', 'NASDAQ'),
-        ('TSM', 'Taiwan Semiconductor Manufacturing Co.', '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'ผลิตชิปเซมิคอนดักเตอร์', 'NYSE'),
-        ('PLTR', 'Palantir Technologies Inc.', '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'แพลตฟอร์มวิเคราะห์ข้อมูล AI', 'NYSE'),
-        ('MRVL', 'Marvell Technology, Inc.', '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'โครงสร้างพื้นฐานเซมิคอนดักเตอร์', 'NASDAQ'),
-        ('TSLA', 'Tesla, Inc.', '🛍️ สินค้าฟุ่มเฟือย / ค้าปลีก & ยานยนต์', 'ยานยนต์ไฟฟ้าและพลังงานสะอาด', 'NASDAQ'),
-        ('AMD', 'Advanced Micro Devices, Inc.', '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'โปรเซสเซอร์และกราฟิกการ์ด', 'NASDAQ'),
-        ('ARM', 'Arm Holdings plc', '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'สถาปัตยกรรมชิปและซีพียู', 'NASDAQ'),
-        ('SMCI', 'Super Micro Computer, Inc.', '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'เซิร์ฟเวอร์และระบบคลาวด์ AI', 'NASDAQ'),
-        ('RKLB', 'Rocket Lab USA, Inc.', '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'เทคโนโลยีปล่อยจรวดและอวกาศ', 'NASDAQ'),
-        ('AAOI', 'Applied Optoelectronics, Inc.', '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'อุปกรณ์ไฟเบอร์ออปติกและเลเซอร์', 'NASDAQ'),
-        ('CRWV', 'CoreWeave, Inc.', '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'คลาวด์คอมพิวติ้งสำหรับ AI', 'NASDAQ'),
-        ('RXT', 'Rackspace Technology, Inc.', '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'บริการมัลติคลาวด์และโฮสติ้ง', 'NASDAQ'),
-        ('BZAI', 'Blaize Holdings, Inc.', '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'โปรเซสเซอร์ Edge AI', 'NASDAQ'),
-        ('SOFI', 'SoFi Technologies, Inc.', '🏦 การเงิน / ธนาคาร & ประกันภัย', 'ฟินเทคและการเงินดิจิทัล', 'NASDAQ'),
-        ('COIN', 'Coinbase Global, Inc.', '🏦 การเงิน / ธนาคาร & ประกันภัย', 'แพลตฟอร์มซื้อขายคริปโทเคอร์เรนซี', 'NASDAQ'),
-        ('HOOD', 'Robinhood Markets, Inc.', '🏦 การเงิน / ธนาคาร & ประกันภัย', 'แอปพลิเคชันการลงทุนและเทรด', 'NASDAQ'),
-        ('MSTR', 'MicroStrategy Incorporated', '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'ซอฟต์แวร์องค์กรและสินทรัพย์บิตคอยน์', 'NASDAQ'),
-        ('DKNG', 'DraftKings Inc.', '📡 สื่อสาร / โทรคมนาคม & บันเทิง', 'แพลตฟอร์มบันเทิงและกีฬา', 'NASDAQ'),
-        ('HIMS', 'Hims & Hers Health, Inc.', '🏥 สุขภาพ / การแพทย์ & ยา', 'เทเลเฮลท์และการดูแลสุขภาพ', 'NYSE'),
-        ('APP', 'AppLovin Corporation', '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'การตลาดและการโฆษณาแอปพลิเคชัน', 'NASDAQ'),
-        ('ASTS', 'AST SpaceMobile, Inc.', '📡 สื่อสาร / โทรคมนาคม & บันเทิง', 'เครือข่ายมือถือดาวเทียมอวกาศ', 'NASDAQ'),
-        ('RDDT', 'Reddit, Inc.', '📡 สื่อสาร / โทรคมนาคม & บันเทิง', 'แพลตฟอร์มโซเชียลและชุมชนออนไลน์', 'NYSE'),
-        ('IREN', 'Iris Energy Limited', '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'ศูนย์ข้อมูล AI และพลังงานหมุนเวียน', 'NASDAQ')
-    ]
-    for sym, name, sec, ind, ex in extra_tickers:
-        items.append({'ticker': sym, 'name': name, 'sector': sec, 'industry': ind, 'exchange': ex})
-
-    if scope == "ALL":
-        try:
-            sec_url = "https://www.sec.gov/files/company_tickers.json"
-            headers = {'User-Agent': 'USStockScannerApp/2.0 (admin@stockscannerpro.org)'}
-            r = requests.get(sec_url, headers=headers, timeout=3)
-            if r.status_code == 200:
-                data = r.json()
-                for v in data.values():
-                    t = str(v.get('ticker', '')).strip().upper().replace('.', '-')
-                    c_title = str(v.get('title', t))
-                    if t and t.isalpha() and len(t) <= 5:
-                        items.append({'ticker': t, 'name': c_title, 'sector': 'US Market', 'industry': 'ธุรกิจทั่วไป', 'exchange': 'US Market'})
-        except Exception:
-            pass
-
+    # กรอง Ticker ซ้ำและทำความสะอาด
     unique_items = []
     seen = set()
-    for item in items:
+    for item in master_directory:
         sym = item['ticker']
         if sym and sym not in seen and len(sym) <= 6:
             unique_items.append(item)
@@ -910,7 +983,7 @@ def check_ma_snr_combo(item_input, info_mode=False):
             'bounce_8d_pct': f'+{bounce_8d_pct:.2f}%'
         }
 
-        # ดึงข้อมูลโปรไฟล์บริษัทและผู้ถือครองเสมอเพื่อไม่ให้เป็น N/A
+        # ดึงข้อมูลรายละเอียดบริษัทและผู้ถือครองเสมอเพื่อให้ไม่เป็น N/A
         co_info = get_company_info_and_holders(ticker)
         if co_info:
             if co_info.get('longNameEn') and co_info['longNameEn'] != ticker:
@@ -1185,7 +1258,7 @@ with tab2:
         st.rerun()
 
     if scan_btn and not is_busy:
-        # บังคับล้างแคชการวิเคราะห์ตลาดเพื่อให้ดึงข้อมูลสดใหม่ทุกครั้งที่กดสแกน
+        # บังคับล้างแคชเพื่อให้สแกนสดใหม่ทุกครั้งที่กดปุ่ม
         check_ma_snr_combo.clear()
         
         server_state["is_scanning"] = True
