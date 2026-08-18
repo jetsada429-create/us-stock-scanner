@@ -319,15 +319,17 @@ st.markdown(
         color: #F8FAFC !important;
     }
     .biz-summary {
-        font-size: 0.82rem !important;
-        color: #F1F5F9 !important;
+        font-size: 0.86rem !important;
+        color: #F8FAFC !important;
         background-color: #0B132B !important;
-        padding: 10px !important;
-        border-radius: 6px;
-        border-left: 3px solid #3B82F6 !important;
+        padding: 12px 14px !important;
+        border-radius: 8px;
+        border-left: 4px solid #3B82F6 !important;
         border: 1px solid #334155 !important;
-        margin-bottom: 0.3rem;
-        line-height: 1.5;
+        margin-top: 6px;
+        margin-bottom: 0.5rem;
+        line-height: 1.6;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     }
     .pattern-box {
         background-color: #172554 !important;
@@ -622,41 +624,43 @@ def translate_text_to_thai(text):
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_company_info_and_holders(ticker):
     try:
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        url = f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{ticker}?modules=assetProfile,defaultKeyStatistics"
+        r = requests.get(url, headers=headers, timeout=3.0)
+        if r.status_code == 200:
+            res_json = r.json().get('quoteSummary', {}).get('result', [{}])[0]
+            profile = res_json.get('assetProfile', {})
+            stats = res_json.get('defaultKeyStatistics', {})
+
+            raw_summary = profile.get('longBusinessSummary', '')
+            raw_sector = profile.get('sector', 'N/A')
+            raw_industry = profile.get('industry', 'N/A')
+            shares_out = stats.get('sharesOutstanding', {}).get('raw', 0)
+            inst_held = stats.get('heldPercentInstitutions', {}).get('raw', 0)
+            insider_held = stats.get('heldPercentInsiders', {}).get('raw', 0)
+
+            th_summary = translate_text_to_thai(raw_summary) if raw_summary else 'N/A'
+            sector_th = SECTOR_MAP_TH.get(raw_sector, raw_sector)
+            industry_th = translate_text_to_thai(raw_industry) if raw_industry != 'N/A' else 'N/A'
+            retail_held_pct = f"{max(0.0, 100 - (inst_held + insider_held)*100):.2f}%" if inst_held or insider_held else "N/A"
+
+            return {
+                'longNameEn': profile.get('longName', ticker),
+                'sectorTh': sector_th,
+                'industryTh': industry_th,
+                'summaryTh': th_summary,
+                'sharesOutstanding': f"{shares_out:,.0f}" if shares_out else "N/A",
+                'institutionalHeld': f"{inst_held*100:.2f}%" if inst_held else "N/A",
+                'insiderHeld': f"{insider_held*100:.2f}%" if insider_held else "N/A",
+                'retailHeld': retail_held_pct
+            }
+    except Exception:
+        pass
+    
+    try:
         stock = yf.Ticker(ticker, session=get_yfinance_session())
         info = stock.info
-        if not info or len(info) < 5:
-            # ใช้ Yahoo Quote Summary API เป็นระบบสำรอง
-            headers = {'User-Agent': 'Mozilla/5.0'}
-            url = f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{ticker}?modules=assetProfile,defaultKeyStatistics"
-            r = requests.get(url, headers=headers, timeout=3.0)
-            if r.status_code == 200:
-                res_json = r.json().get('quoteSummary', {}).get('result', [{}])[0]
-                profile = res_json.get('assetProfile', {})
-                stats = res_json.get('defaultKeyStatistics', {})
-                
-                raw_summary = profile.get('longBusinessSummary', '')
-                raw_sector = profile.get('sector', 'N/A')
-                raw_industry = profile.get('industry', 'N/A')
-                shares_out = stats.get('sharesOutstanding', {}).get('raw', 0)
-                inst_held = stats.get('heldPercentInstitutions', {}).get('raw', 0)
-                insider_held = stats.get('heldPercentInsiders', {}).get('raw', 0)
-
-                th_summary = translate_text_to_thai(raw_summary) if raw_summary else 'N/A'
-                sector_th = SECTOR_MAP_TH.get(raw_sector, raw_sector)
-                industry_th = translate_text_to_thai(raw_industry) if raw_industry != 'N/A' else 'N/A'
-                retail_held_pct = f"{max(0.0, 100 - (inst_held + insider_held)*100):.2f}%" if inst_held or insider_held else "N/A"
-
-                return {
-                    'longNameEn': profile.get('longName', ticker),
-                    'sectorTh': sector_th,
-                    'industryTh': industry_th,
-                    'summaryTh': th_summary,
-                    'sharesOutstanding': f"{shares_out:,.0f}" if shares_out else "N/A",
-                    'institutionalHeld': f"{inst_held*100:.2f}%" if inst_held else "N/A",
-                    'insiderHeld': f"{insider_held*100:.2f}%" if insider_held else "N/A",
-                    'retailHeld': retail_held_pct
-                }
-        else:
+        if info and len(info) > 5:
             raw_summary = info.get('longBusinessSummary', '')
             raw_sector = info.get('sector', 'N/A')
             raw_industry = info.get('industry', 'N/A')
@@ -681,6 +685,7 @@ def get_company_info_and_holders(ticker):
             }
     except Exception:
         pass
+
     return {'longNameEn': ticker, 'sectorTh': 'N/A', 'industryTh': 'N/A', 'summaryTh': 'N/A', 'sharesOutstanding': 'N/A', 'institutionalHeld': 'N/A', 'insiderHeld': 'N/A', 'retailHeld': 'N/A'}
 
 
@@ -723,7 +728,6 @@ def get_financials(ticker):
     except Exception:
         pass
     
-    # ระบบสำรองดึงงบการเงินผ่าน Quote Summary API
     try:
         url = f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{ticker}?modules=incomeStatementHistoryQuarterly"
         r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3.0)
@@ -1181,6 +1185,9 @@ with tab2:
         st.rerun()
 
     if scan_btn and not is_busy:
+        # บังคับล้างแคชการวิเคราะห์ตลาดเพื่อให้ดึงข้อมูลสดใหม่ทุกครั้งที่กดสแกน
+        check_ma_snr_combo.clear()
+        
         server_state["is_scanning"] = True
         server_state["scan_start_time"] = datetime.now()
         status_text = st.empty()
@@ -1329,7 +1336,7 @@ with tab2:
                                     
                                     if summary_found and summary_found != 'N/A':
                                         with st.expander(f"📖 สรุปลักษณะธุรกิจ {ticker_found}", expanded=False):
-                                            st.markdown(f'<div style="font-size:0.76rem; color:#cbd5e1; line-height:1.45;">{summary_found}</div>', unsafe_allow_html=True)
+                                            st.markdown(f'<div class="biz-summary">{summary_found}</div>', unsafe_allow_html=True)
                                 else:
                                     st.warning("ไม่พบข้อมูลกราฟ")
                                     
