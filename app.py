@@ -83,7 +83,7 @@ FOREX_DIRECTORY = [
     {'ticker': 'XAGUSD', 'name': 'Silver Spot / US Dollar (โลหะเงิน)', 'type': 'Commodity', 'exchange': 'Precious Metals'}
 ]
 
-# ================= 2. ฟังก์ชันตัวช่วยระดับบนสุด (Top-Level Helpers ป้องกัน NameError) =================
+# ================= 2. ฟังก์ชันตัวช่วยทั้งหมด (ประกาศก่อนเรียกใช้งาน ป้องกัน NameError 100%) =================
 def get_time_elapsed_thai(last_dt):
     if not last_dt:
         return ""
@@ -131,7 +131,6 @@ def resolve_financial_symbol(ticker_str):
         return f"{raw}=X", raw
     return raw, raw
 
-# ================= 3. จัดการ Session และ Global State =================
 @st.cache_resource
 def get_yfinance_session():
     session = requests.Session()
@@ -159,7 +158,7 @@ def get_global_server_state():
 
 server_state = get_global_server_state()
 
-# ================= 4. Custom CSS ปรับแต่งสีสันให้คมชัดโดดเด่น =================
+# ================= 3. Custom CSS ปรับแต่งสีสันให้คมชัดโดดเด่น =================
 st.markdown(
     """
     <style>
@@ -281,7 +280,6 @@ st.markdown(
     .biz-summary { font-size: 0.86rem !important; color: #F8FAFC !important; background-color: #0B132B !important; padding: 12px 14px !important; border-radius: 8px; border-left: 4px solid #3B82F6 !important; border: 1px solid #334155 !important; margin-top: 6px; margin-bottom: 0.5rem; line-height: 1.6; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
     .pattern-box { background-color: #172554 !important; color: #93C5FD !important; padding: 5px 8px; border-radius: 6px; font-size: 0.74rem; font-weight: 600; border: 1px solid #1E40AF !important; margin-top: 3px; margin-bottom: 4px; }
     
-    /* สไตล์การ์ด Flow ตลาด */
     .market-flow-card {
         background: #0B132B;
         border: 1px solid #1E293B;
@@ -305,7 +303,6 @@ st.markdown(
     .flow-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }
     .flow-sub-card { background: #0F172A; border: 1px solid #1E293B; border-radius: 8px; padding: 10px 8px; text-align: center; }
     
-    /* กล่องเตือนภัยจุดระวังโดนเทขาย */
     .danger-alert-box {
         background: #2A0814;
         border: 1px solid #E11D48;
@@ -317,7 +314,6 @@ st.markdown(
         color: #FECDD3;
     }
 
-    /* สไตล์ข่าวสาร */
     .news-card-link {
         background: #0B132B;
         border: 1px solid #1E293B;
@@ -492,7 +488,38 @@ def create_market_flow_dual_chart(df, index_name):
     except Exception:
         return None
 
-# ================= 6. ฐานข้อมูลหุ้นหลัก =================
+# ================= 6. ฟังก์ชันดึงข่าวสารเศรษฐกิจมหภาค (Macro News) =================
+@st.cache_data(ttl=900, show_spinner=False)
+def get_macro_market_news():
+    results = []
+    feeds = [
+        "https://feeds.finance.yahoo.com/rss/2.0/headline?s=^GSPC,^IXIC,SPY,QQQ&region=US&lang=en-US",
+        "https://feeds.finance.yahoo.com/rss/2.0/headline?s=GC=F,CL=F,DX-Y.NYB&region=US&lang=en-US"
+    ]
+    for url in feeds:
+        try:
+            res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3.5)
+            if res.status_code == 200:
+                root = ET.fromstring(res.content)
+                for item in root.findall('./channel/item')[:4]:
+                    t_node, l_node, p_node = item.find('title'), item.find('link'), item.find('pubDate')
+                    raw_title = t_node.text if t_node is not None else ""
+                    raw_link = l_node.text if l_node is not None else "#"
+                    raw_pub = p_node.text[:16] if p_node is not None else ""
+                    if raw_title and not any(r['link'] == raw_link for r in results):
+                        title_th = translate_text_to_thai(raw_title)
+                        results.append({
+                            'title': title_th if title_th else raw_title,
+                            'title_en': raw_title,
+                            'link': raw_link,
+                            'time': raw_pub
+                        })
+        except Exception:
+            pass
+        if len(results) >= 8: break
+    return results
+
+# ================= 7. ฐานข้อมูลหุ้นหลัก =================
 @st.cache_data(ttl=86400)
 def get_us_stock_directory(scope="TOP500"):
     master_directory = [
@@ -518,6 +545,7 @@ def get_us_stock_directory(scope="TOP500"):
         {'ticker': 'RKLB', 'name': 'Rocket Lab USA, Inc.', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'เทคโนโลยีปล่อยจรวดและอวกาศ', 'exchange': 'NASDAQ'},
         {'ticker': 'JPM', 'name': 'JPMorgan Chase & Co.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'ธนาคารพาณิชย์ระดับโลก', 'exchange': 'NYSE'},
         {'ticker': 'V', 'name': 'Visa Inc.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'เครือข่ายการชำระเงินดิจิทัล', 'exchange': 'NYSE'},
+        {'ticker': 'MA', 'name': 'Mastercard Incorporated', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'บริการชำระเงินระดับโลก', 'exchange': 'NYSE'},
         {'ticker': 'LLY', 'name': 'Eli Lilly and Company', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'เวชภัณฑ์และยารักษาโรค', 'exchange': 'NYSE'},
         {'ticker': 'UNH', 'name': 'UnitedHealth Group Incorporated', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'ประกันสุขภาพและบริการทางการแพทย์', 'exchange': 'NYSE'},
         {'ticker': 'XOM', 'name': 'Exxon Mobil Corporation', 'sector': '⚡ พลังงาน / น้ำมัน & ก๊าซ', 'industry': 'สำรวจและผลิตน้ำมัน & ก๊าซธรรมชาติ', 'exchange': 'NYSE'},
@@ -533,7 +561,7 @@ def get_us_stock_directory(scope="TOP500"):
     ]
     return master_directory
 
-# ================= 7. ฟังก์ชันดึงข้อมูลราคาและประมวลผลหุ้นรายตัว =================
+# ================= 8. ฟังก์ชันวิเคราะห์เทคนิคอลรายตัว =================
 def calculate_single_swing_snr(df, latest_close):
     n = len(df)
     window_n = min(n, 120)
@@ -749,7 +777,7 @@ def create_ta_chart(df, ticker, res_data):
     except Exception:
         return None
 
-# ================= 8. ฟังก์ชันวิเคราะห์หลัก =================
+# ================= 9. ฟังก์ชันวิเคราะห์หลัก =================
 @st.cache_data(ttl=3600, show_spinner=False)
 def check_ma_snr_combo(item_input, info_mode=False):
     try:
@@ -904,7 +932,7 @@ def check_ma_snr_combo(item_input, info_mode=False):
         pass
     return None, None
 
-# ================= 9. ฟังก์ชันช่วยเรนเดอร์ UI รายละเอียด =================
+# ================= 10. ฟังก์ชันช่วยเรนเดอร์ UI รายละเอียด =================
 def render_analysis_view(res, raw_df, df_profit, news_items, single_ticker, is_forex=False):
     company_full_name = res.get("longNameEn", single_ticker)
     sector_desc = res.get("sectorTh", "N/A")
@@ -1066,7 +1094,7 @@ def render_analysis_view(res, raw_df, df_profit, news_items, single_ticker, is_f
             if summary_text != 'N/A':
                  st.markdown(f'<div class="biz-summary">{summary_text}</div>', unsafe_allow_html=True)
 
-# ================= 10. ส่วนแสดงผล UI หน้าจอ (5 แท็บสมบูรณ์) =================
+# ================= 11. ส่วนแสดงผล UI หน้าจอ (5 แท็บสมบูรณ์) =================
 tab_market, tab1, tab2, tab3, tab_news = st.tabs([
     UI_LANG_MAP['tab_market_flow'],
     UI_LANG_MAP['tab_search_ticker'],
@@ -1441,7 +1469,7 @@ with tab3:
                     'pattern_name', 'Support 1 ($)', 'Support 2 ($)', 'Support 3 ($)', 'RSI', 
                     'Resist 1 ($)', 'Resist 2 ($)', 'Resist 3 ($)', 'Resist 4 ($)', 'Date'
                 ]
-                available_fx_cols = [c for c in cols_to_show_fx if c in df_display_filtered.columns] if 'df_display_filtered' in locals() else [c for c in cols_to_show_fx if c in df_fx_display.columns]
+                available_fx_cols = [c for c in cols_to_show_fx if c in df_fx_display.columns]
                 server_state["forex_df"] = df_fx_display[available_fx_cols]
             st.rerun()
 
