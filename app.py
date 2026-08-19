@@ -88,6 +88,8 @@ FOREX_DIRECTORY = [
 def get_time_elapsed_thai(last_dt):
     if not last_dt: return ""
     try:
+        if getattr(last_dt, "tzinfo", None) is not None:
+            last_dt = last_dt.replace(tzinfo=None)
         diff = datetime.now() - last_dt
         secs = int(diff.total_seconds())
         if secs < 60: return f" (เพิ่งสแกนเมื่อ {secs} วิที่แล้ว)"
@@ -95,6 +97,11 @@ def get_time_elapsed_thai(last_dt):
         else: return f" (สแกนไปแล้ว {secs // 3600} ชม. ก่อน)"
     except Exception:
         return ""
+
+def html_safe(value):
+    """Escape externally sourced text before rendering with unsafe_allow_html."""
+    import html
+    return html.escape(str(value if value is not None else ""), quote=True)
 
 def translate_text_to_thai(text):
     if not text or text == 'N/A' or not str(text).strip(): return ''
@@ -310,6 +317,8 @@ st.markdown(
 
 st.markdown(f'<div class="main-title">{UI_LANG_MAP["search_ticker_title"]}</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="sub-title">{UI_LANG_MAP["search_ticker_subtitle"]}</div>', unsafe_allow_html=True)
+st.caption("🟢 ระบบออนไลน์ • Cache ราคา 1 ชม. • News/Market Flow 15 นาที • ใช้ข้อมูลจาก Yahoo Finance/Google News")
+
 
 # ================= 4. ฟังก์ชันดึงรายชื่อหุ้นและฐานข้อมูล =================
 @st.cache_data(ttl=86400)
@@ -417,7 +426,7 @@ def fetch_stock_history_dual(ticker):
         pass
 
     try:
-        stock = yf.Ticker(resolved_ticker)
+        stock = yf.Ticker(resolved_ticker, session=get_yfinance_session())
         df = stock.history(period='6mo', interval='1d')
         if df is not None and not df.empty and len(df) >= 15:
             if isinstance(df.columns, pd.MultiIndex):
@@ -644,6 +653,242 @@ def create_market_flow_dual_chart(df, index_name):
     except Exception:
         return None
 
+
+# ================= 5.5 ฟังก์ชันเสริมที่จำเป็น =================
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def get_financials(ticker):
+    """ดึงกำไรสุทธิรายไตรมาสล่าสุดจาก yfinance อย่างปลอดภัย"""
+    try:
+        resolved_ticker, _ = resolve_financial_symbol(ticker)
+        stock = yf.Ticker(resolved_ticker, session=get_yfinance_session())
+
+        stmt = stock.quarterly_income_stmt
+        if stmt is None or stmt.empty:
+            return None
+
+        # yfinance เปลี่ยนชื่อแถว/ลำดับคอลัมน์ได้ จึงรองรับชื่อที่พบบ่อย
+        possible_rows = [
+            "Net Income",
+            "NetIncome",
+            "Net Income Common Stockholders",
+            "Net Income Including Noncontrolling Interests",
+        ]
+        row_name = next((r for r in possible_rows if r in stmt.index), None)
+        if row_name is None:
+            return None
+
+        values = pd.to_numeric(stmt.loc[row_name], errors="coerce").dropna()
+        if values.empty:
+            return None
+
+        values = values.sort_index(ascending=False).head(3)
+        records = []
+        for dt, val in values.items():
+            try:
+                dt_obj = pd.Timestamp(dt)
+                q_label = dt_obj.strftime("%Y-%m-%d")
+            except Exception:
+                q_label = str(dt)
+            records.append({
+                "Quarter End": q_label,
+                "Net Income (M$)": round(float(val) / 1_000_000, 2)
+            })
+
+        return pd.DataFrame(records)
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def get_stock_news(ticker, limit=8):
+    """ดึงข่าวหุ้นจาก Yahoo RSS; ถ้า RSS ใช้งานไม่ได้ให้คืน []"""
+    try:
+        resolved_ticker, _ = resolve_financial_symbol(ticker)
+        url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={resolved_ticker}&region=US&lang=en-US"
+        response = requests.get(
+            url,
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=5
+        )
+        response.raise_for_status()
+
+        root = ET.fromstring(response.content)
+        items = []
+        for item in root.findall(".//item")[:limit]:
+            title = (item.findtext("title") or "").strip()
+            link = (item.findtext("link") or "").strip()
+            pub = (item.findtext("pubDate") or "").strip()
+            source = (item.findtext("source") or "Yahoo Finance").strip()
+
+            if title and link:
+                items.append({
+                    "title": translate_text_to_thai(title),
+                    "title_en": title,
+                    "link": link,
+                    "publisher": source,
+                    "time": pub,
+                })
+        return items
+    except Exception:
+        return []
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def calculate_market_flow_advanced(symbol, index_name):
+    """
+    คำนวณ Market Flow แบบ proxy จากราคา + volume ของ ETF
+    ไม่อ้างว่าเป็นข้อมูล order-flow/institutional flow จริงจากตลาด
+    """
+    try:
+        df = yf.Ticker(symbol, session=get_yfinance_session()).history(
+            period="6mo", interval="1d", auto_adjust=False
+        )
+        if df is None or df.empty:
+            return None, None
+
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+
+        required = ["Open", "High", "Low", "Close", "Volume"]
+        if not all(c in df.columns for c in required):
+            return None, None
+
+        df = df.dropna(subset=["Open", "High", "Low", "Close"]).copy()
+        if len(df) < 25:
+            return None, None
+
+        # Price-volume pressure proxy:
+        # close location within range × volume
+        rng = (df["High"] - df["Low"]).replace(0, np.nan)
+        pressure = ((df["Close"] - df["Low"]) / rng).clip(0, 1).fillna(0.5)
+        signed_flow = ((pressure - 0.5) * 2.0) * df["Volume"].fillna(0)
+        df["flow_proxy"] = signed_flow
+        df["cum_money_flow"] = df["flow_proxy"].cumsum() / 1_000_000
+
+        def flow_pct(days):
+            part = df.tail(days)
+            if part.empty:
+                return 50.0, 50.0
+            p = part["flow_proxy"]
+            buy = float(p.clip(lower=0).sum())
+            sell = float((-p.clip(upper=0)).sum())
+            total = buy + sell
+            if total <= 0:
+                return 50.0, 50.0
+            return round(buy / total * 100, 1), round(sell / total * 100, 1)
+
+        d1_buy, d1_sell = flow_pct(1)
+        w1_buy, w1_sell = flow_pct(5)
+        m1_buy, m1_sell = flow_pct(21)
+
+        last_close = float(df["Close"].iloc[-1])
+        prev_close = float(df["Close"].iloc[-2])
+        chg_pct = ((last_close - prev_close) / prev_close * 100) if prev_close else 0.0
+
+        ma20 = float(df["Close"].rolling(20).mean().iloc[-1])
+        ma50 = float(df["Close"].rolling(50).mean().iloc[-1])
+        trend_up = last_close >= ma20 >= ma50
+
+        if d1_buy >= 60 and w1_buy >= 55:
+            market_state = "🟢 แรงซื้อเด่น"
+            state_color = "#10B981"
+            state_desc = "แรงซื้อระยะสั้นและสัปดาห์ยังได้เปรียบจาก proxy ราคา+ปริมาณ"
+        elif d1_sell >= 60 and w1_sell >= 55:
+            market_state = "🔴 แรงขายเด่น"
+            state_color = "#F43F5E"
+            state_desc = "แรงขายระยะสั้นและสัปดาห์ยังได้เปรียบ"
+        elif trend_up:
+            market_state = "🟡 ขาขึ้นแต่ต้องติดตามแรงขาย"
+            state_color = "#FBBF24"
+            state_desc = "ราคาอยู่เหนือค่าเฉลี่ยหลัก แต่ flow proxy ยังไม่ชัดเจน"
+        else:
+            market_state = "⚪ Sideways / รอทิศทาง"
+            state_color = "#94A3B8"
+            state_desc = "แรงซื้อและแรงขายใกล้เคียงกัน"
+
+        divergence_tag = "ไม่มี Divergence เด่นชัด"
+        if chg_pct > 0 and d1_sell > d1_buy:
+            divergence_tag = "⚠️ ราคาบวกแต่แรงขายวันนี้เด่น — ระวังแรงส่งอ่อน"
+        elif chg_pct < 0 and d1_buy > d1_sell:
+            divergence_tag = "🟢 ราคาลบแต่แรงซื้อ proxy เริ่มกลับ — จับตาการฟื้นตัว"
+
+        danger_warning = (
+            f"แนวรับ MA20 ≈ ${ma20:,.2f} | MA50 ≈ ${ma50:,.2f} | "
+            f"ราคาปัจจุบัน ${last_close:,.2f}"
+        )
+
+        data = {
+            "symbol": symbol,
+            "name": index_name,
+            "price": round(last_close, 2),
+            "chg_pct": round(chg_pct, 2),
+            "market_state": market_state,
+            "state_color": state_color,
+            "state_desc": state_desc,
+            "d1_buy_pct": d1_buy,
+            "d1_sell_pct": d1_sell,
+            "w1_buy_pct": w1_buy,
+            "w1_sell_pct": w1_sell,
+            "m1_buy_pct": m1_buy,
+            "m1_sell_pct": m1_sell,
+            "d1_winner": "แรงซื้อ" if d1_buy >= d1_sell else "แรงขาย",
+            "w1_winner": "แรงซื้อ" if w1_buy >= w1_sell else "แรงขาย",
+            "m1_winner": "แรงซื้อ" if m1_buy >= m1_sell else "แรงขาย",
+            "danger_warning": danger_warning,
+            "divergence_tag": divergence_tag,
+        }
+        return data, df
+    except Exception:
+        return None, None
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def get_macro_market_news(limit=10):
+    """ดึงข่าวมหภาคจาก Google News RSS และแปลหัวข้อเป็นไทย"""
+    queries = [
+        "Federal Reserve Fed interest rates economy",
+        "US inflation CPI jobs economy",
+        "stock market Nasdaq S&P 500 macro",
+    ]
+    results = []
+    seen = set()
+
+    try:
+        for q in queries:
+            url = "https://news.google.com/rss/search"
+            params = {"q": q, "hl": "en-US", "gl": "US", "ceid": "US:en"}
+            response = requests.get(
+                url,
+                params=params,
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=5,
+            )
+            response.raise_for_status()
+            root = ET.fromstring(response.content)
+
+            for item in root.findall(".//item"):
+                title = (item.findtext("title") or "").strip()
+                link = (item.findtext("link") or "").strip()
+                pub = (item.findtext("pubDate") or "").strip()
+                if not title or not link or link in seen:
+                    continue
+                seen.add(link)
+                results.append({
+                    "title": translate_text_to_thai(title),
+                    "title_en": title,
+                    "link": link,
+                    "time": pub,
+                })
+                if len(results) >= limit:
+                    return results
+    except Exception:
+        pass
+
+    return results
+
+
+
 # ================= 6. ฟังก์ชันวิเคราะห์หลัก (มีระบบ Cache 1 ชม.) =================
 @st.cache_data(ttl=3600, show_spinner=False)
 def check_ma_snr_combo(item_input, info_mode=False):
@@ -702,7 +947,7 @@ def check_ma_snr_combo(item_input, info_mode=False):
         if drop_8d_pct > -8: bull_score += 10
         bullish_pct = min(96.0, max(5.0, round(bull_score * 0.95 + 4.0, 1)))
 
-        dist_s1_pct = ((latest_close - s1) / s1) * 100
+        dist_s1_pct = ((latest_close - s1) / s1) * 100 if s1 else 0.0
 
         if (not is_above_ma20 and not is_above_ma50 and latest_rsi < 45) or drop_8d_pct <= -15.0:
             trend_status = "DOWNTREND"
@@ -744,9 +989,9 @@ def check_ma_snr_combo(item_input, info_mode=False):
             badge_label = f"〰️ สะสมแรง/ไซด์เวย์: {bullish_pct}%"
             status_desc = f"📦 ราคาแกว่งตัวสร้างฐานในกรอบแคบ ยังไม่มีทิศทางชัดเจน รอการเบรกเอาท์"
 
-        dist_from_sup = ((latest_close - s1) / s1) * 100
+        dist_from_sup = ((latest_close - s1) / s1) * 100 if s1 else 0.0
         pat_name, pat_score = calculate_ai_pattern_match(df.tail(60))
-        vol_val = df['volume'].iloc[-1] if 'volume' in df.columns else 0
+        vol_val = df['volume'].iloc[-1] if 'volume' in df.columns and pd.notna(df['volume'].iloc[-1]) else 0
 
         res_data = {
             'Ticker': ticker,
@@ -800,10 +1045,10 @@ def check_ma_snr_combo(item_input, info_mode=False):
     return None, None
 
 def render_analysis_view(res, raw_df, df_profit, news_items, single_ticker, is_forex=False):
-    company_full_name = res.get("longNameEn", single_ticker)
-    sector_desc = res.get("sectorTh", "N/A")
-    industry_desc = res.get("industryTh", "N/A")
-    exchange_desc = res.get("Exchange", "US Market")
+    company_full_name = html_safe(res.get("longNameEn", single_ticker))
+    sector_desc = html_safe(res.get("sectorTh", "N/A"))
+    industry_desc = html_safe(res.get("industryTh", "N/A"))
+    exchange_desc = html_safe(res.get("Exchange", "US Market"))
 
     st.markdown(f'<p class="company-header">{single_ticker} : {company_full_name} <span class="price-badge badge-market">🏛️ {exchange_desc}</span></p>', unsafe_allow_html=True)
     st.markdown(f'<div class="sector-badge">🏷️ กลุ่มธุรกิจ: {sector_desc} | ย่อย: {industry_desc}</div>', unsafe_allow_html=True)
@@ -866,9 +1111,9 @@ def render_analysis_view(res, raw_df, df_profit, news_items, single_ticker, is_f
 
     st.markdown("#### 🎯 กลยุทธ์แบ่งไม้เข้าซื้อ & ประเมินความแข็งแรงของแนวรับ")
     curr_p = res.get('Price ($)', 1.0)
-    dist_s1 = ((res.get('Support 1 ($)', 0) - curr_p) / curr_p) * 100
-    dist_s2 = ((res.get('Support 2 ($)', 0) - curr_p) / curr_p) * 100
-    dist_s3 = ((res.get('Support 3 ($)', 0) - curr_p) / curr_p) * 100
+    dist_s1 = ((res.get('Support 1 ($)', 0) - curr_p) / curr_p) * 100 if curr_p else 0.0
+    dist_s2 = ((res.get('Support 2 ($)', 0) - curr_p) / curr_p) * 100 if curr_p else 0.0
+    dist_s3 = ((res.get('Support 3 ($)', 0) - curr_p) / curr_p) * 100 if curr_p else 0.0
 
     st.markdown(f"""
     <div class="strategy-card" style="border-left: 4px solid #22C55E;">
@@ -1080,7 +1325,7 @@ with tab2:
         "🎯 เลือกขอบเขตและจำนวนหุ้นที่จะสแกน:",
         ["⚡ หุ้นผู้นำตลาด S&P 500 & Top Tech (500 ตัวจริงครบ A-Z - สแกนเร็ว 15 วิ)",
          "🚀 หุ้น Growth & Momentum ชั้นนำ (1,000 ตัวคัดเกรด - แนะนำ 35 วิ)",
-         "🌐 หุ้น Active สภาพคล่องสูงทั้งตลาด (2,500+ หุ้น - เต็มระบบ 1 นาที)"],
+         "🌐 หุ้น Active ในฐานข้อมูลที่ระบบดึงได้ (สูงสุด 2,500 ตัว)"],
         index=0,
         horizontal=True
     )
@@ -1122,7 +1367,8 @@ with tab2:
         count = 0
 
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=40) as executor:
+            scan_workers = min(24, max(4, (len(stock_directory) // 50) + 4))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=scan_workers) as executor:
                 futures = {executor.submit(check_ma_snr_combo, item, False): item for item in stock_directory}
                 for future in concurrent.futures.as_completed(futures):
                     count += 1
@@ -1146,6 +1392,14 @@ with tab2:
         server_state["last_scanned_dt"] = datetime.now()
         server_state["last_scanned_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         if results:
+            # จัดอันดับผลลัพธ์โดยให้คะแนนโครงสร้าง + RSI ที่เหมาะสม + pattern score
+            results.sort(
+                key=lambda item: (
+                    float(item['res_data'].get('bullish_pct', 0) or 0),
+                    float(item['res_data'].get('pattern_score', 0) or 0)
+                ),
+                reverse=True
+            )
             all_res_data = [item['res_data'] for item in results]
             df_result_display = pd.DataFrame(all_res_data)
             cols_to_show = [
