@@ -451,7 +451,6 @@ def get_us_stock_directory(scope="TOP500"):
         {'ticker': 'LLY', 'name': 'Eli Lilly and Company', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'เวชภัณฑ์และยารักษาโรค', 'exchange': 'NYSE'},
         {'ticker': 'UNH', 'name': 'UnitedHealth Group Incorporated', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'ประกันสุขภาพและบริการทางการแพทย์', 'exchange': 'NYSE'},
         {'ticker': 'XOM', 'name': 'Exxon Mobil Corporation', 'sector': '⚡ พลังงาน / น้ำมัน & ก๊าซ', 'industry': 'สำรวจและผลิตน้ำมัน & ก๊าซธรรมชาติ', 'exchange': 'NYSE'},
-        {'ticker': 'CVX', 'name': 'Chevron Corporation', 'sector': '⚡ พลังงาน / น้ำมัน & ก๊าซ', 'industry': 'พลังงานปิโตรเลียมครบวงจร', 'exchange': 'NYSE'},
         {'ticker': 'WMT', 'name': 'Walmart Inc.', 'sector': '🛒 สินค้าอุปโภคบริโภคจำเป็น', 'industry': 'ค้าปลีกและซูเปอร์เซ็นเตอร์', 'exchange': 'NYSE'},
         {'ticker': 'COST', 'name': 'Costco Wholesale Corporation', 'sector': '🛒 สินค้าอุปโภคบริโภคจำเป็น', 'industry': 'คลังสินค้าสมาชิกค้าปลีก', 'exchange': 'NASDAQ'},
         {'ticker': 'MSTR', 'name': 'MicroStrategy Incorporated', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ซอฟต์แวร์องค์กรและสินทรัพย์บิตคอยน์', 'exchange': 'NASDAQ'},
@@ -669,32 +668,6 @@ def get_financials(ticker):
             if data: return pd.DataFrame(data)
     except Exception: pass
     return None
-
-def create_ta_chart(df, ticker, res_data):
-    if df is None or df.empty: return None
-    fig = go.Figure(data=[go.Candlestick(
-        x=df.index, open=df['open'], high=df['high'], low=df['low'], close=df['close'], name='ราคา'
-    )])
-    fast_ma = df['close'].rolling(20).mean()
-    slow_ma = df['close'].rolling(50).mean()
-    fig.add_trace(go.Scatter(x=df.index, y=fast_ma, line=dict(color='#38BDF8', width=1.2), name='MA20'))
-    fig.add_trace(go.Scatter(x=df.index, y=slow_ma, line=dict(color='#FB923C', width=1.2), name='MA50'))
-
-    for key, color, ay_pos in [('Support 1 ($)', '#22C55E', -12), ('Support 2 ($)', '#16A34A', 12), ('Support 3 ($)', '#15803D', -12)]:
-        if key in res_data:
-            val = res_data[key]
-            fig.add_shape(type="line", x0=df.index[0], y0=val, x1=df.index[-1], y1=val, line=dict(color=color, width=1.6, dash='dash'))
-            fig.add_annotation(x=df.index[-1], y=val, text=f"{key.replace(' ($)', '')}: ${val}", bgcolor=color, font=dict(color="white", size=9), xanchor="left", ax=8, ay=ay_pos)
-
-    for key, color, ay_pos in [('Resist 1 ($)', '#EF4444', -12), ('Resist 2 ($)', '#F97316', 12), ('Resist 3 ($)', '#EAB308', -12), ('Resist 4 ($)', '#991B1B', 12)]:
-        if key in res_data:
-            val = res_data[key]
-            fig.add_shape(type="line", x0=df.index[0], y0=val, x1=df.index[-1], y1=val, line=dict(color=color, width=1.6, dash='dash'))
-            fig.add_annotation(x=df.index[-1], y=val, text=f"{key.replace(' ($)', '')}: ${val}", bgcolor=color, font=dict(color="white", size=9), xanchor="left", ax=8, ay=ay_pos)
-
-    fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
-    fig.update_layout(xaxis_rangeslider_visible=False, template='plotly_dark', margin=dict(l=6, r=65, t=10, b=6), height=340, dragmode='pan', yaxis_title="ราคา", showlegend=False)
-    return fig
 
 # ================= 8. ฟังก์ชันวิเคราะห์หลัก =================
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -1023,7 +996,7 @@ tab_market, tab1, tab2, tab3, tab_news = st.tabs([
     UI_LANG_MAP['tab_macro_news']
 ])
 
-# --- TAB ใหม่ 1: ทิศทางตลาด Nasdaq & S&P 500 (Buy-Sell Volume Flow) ---
+# --- TAB 1: ทิศทางตลาด Nasdaq & S&P 500 (Buy-Sell Volume Flow) แก้ไขการเรนเดอร์ให้สวยงาม ---
 with tab_market:
     st.markdown("### 🏛️ วิเคราะห์กระแสเงินและทิศทางตลาด (Nasdaq & S&P 500 Flow)")
     st.caption("คำนวณสัดส่วนแรงซื้อ (Buy Volume) vs แรงขาย (Sell Volume) สะสมรายวัน รายสัปดาห์ และรายเดือน")
@@ -1043,55 +1016,41 @@ with tab_market:
     for col, m_data in zip([col_m1, col_m2], [data_qqq, data_spy]):
         if m_data:
             with col:
-                st.markdown(f"""
-                <div class="market-flow-card">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                        <span style="font-size:1.15rem; font-weight:800; color:#60A5FA;">📈 {m_data['name']}</span>
-                        <span style="font-size:1.1rem; font-weight:800; color:{'#10B981' if m_data['chg_pct'] >= 0 else '#F43F5E'};">${m_data['price']} ({m_data['chg_pct']:+.2f}%)</span>
-                    </div>
-                    <div style="font-size:0.9rem; font-weight:bold; color:{m_data['state_color']}; margin-bottom:4px;">
-                        {m_data['market_state']}
-                    </div>
-                    <div style="font-size:0.78rem; color:#94A3B8; margin-bottom:12px;">
-                        {m_data['state_desc']}
-                    </div>
-                    
-                    <!-- 1 วันล่าสุด -->
-                    <div style="display:flex; justify-content:space-between; font-size:0.75rem; font-weight:600;">
-                        <span class="c-green">🟢 แรงซื้อวันนี้: {m_data['d1_buy_pct']}%</span>
-                        <span class="c-red">🔴 แรงขายวันนี้: {m_data['d1_sell_pct']}%</span>
-                    </div>
-                    <div class="flow-meter-container">
-                        <div class="flow-buy-bar" style="width:{m_data['d1_buy_pct']}%;">{m_data['d1_buy_pct']}%</div>
-                        <div class="flow-sell-bar" style="width:{m_data['d1_sell_pct']}%;">{m_data['d1_sell_pct']}%</div>
-                    </div>
-
-                    <!-- สรุปเปรียบเทียบสัปดาห์ & เดือน -->
-                    <div class="flow-grid-3">
-                        <div class="flow-sub-card">
-                            <div style="font-size:0.7rem; color:#94A3B8;">รายวัน (1D)</div>
-                            <div style="font-size:0.85rem; font-weight:800; color:{'#10B981' if m_data['d1_buy_pct']>=50 else '#F43F5E'};">
-                                {'ซื้อหนุน' if m_data['d1_buy_pct']>=50 else 'ขายกดดัน'}
-                            </div>
-                            <div style="font-size:0.72rem; color:#cbd5e1;">สุทธิ {m_data['d1_buy_pct']}%</div>
-                        </div>
-                        <div class="flow-sub-card">
-                            <div style="font-size:0.7rem; color:#94A3B8;">รายสัปดาห์ (1W)</div>
-                            <div style="font-size:0.85rem; font-weight:800; color:{'#10B981' if m_data['w1_buy_pct']>=50 else '#F43F5E'};">
-                                {'ซื้อสะสม' if m_data['w1_buy_pct']>=50 else 'ขายสะสม'}
-                            </div>
-                            <div style="font-size:0.72rem; color:#cbd5e1;">ซื้อ {m_data['w1_buy_pct']}%</div>
-                        </div>
-                        <div class="flow-sub-card">
-                            <div style="font-size:0.7rem; color:#94A3B8;">รายเดือน (1M)</div>
-                            <div style="font-size:0.85rem; font-weight:800; color:{'#10B981' if m_data['m1_buy_pct']>=50 else '#F43F5E'};">
-                                {'ขาขึ้นคุม' if m_data['m1_buy_pct']>=50 else 'ขาลงคุม'}
-                            </div>
-                            <div style="font-size:0.72rem; color:#cbd5e1;">ซื้อ {m_data['m1_buy_pct']}%</div>
-                        </div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                # เรนเดอร์ HTML ชิดซ้าย ป้องกันปัญหา Code Block
+                html_flow_card = f"""<div class="market-flow-card">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+<span style="font-size:1.15rem; font-weight:800; color:#60A5FA;">📈 {m_data['name']}</span>
+<span style="font-size:1.1rem; font-weight:800; color:{'#10B981' if m_data['chg_pct'] >= 0 else '#F43F5E'};">${m_data['price']} ({m_data['chg_pct']:+.2f}%)</span>
+</div>
+<div style="font-size:0.9rem; font-weight:bold; color:{m_data['state_color']}; margin-bottom:4px;">{m_data['market_state']}</div>
+<div style="font-size:0.78rem; color:#94A3B8; margin-bottom:12px;">{m_data['state_desc']}</div>
+<div style="display:flex; justify-content:space-between; font-size:0.75rem; font-weight:600; margin-bottom:4px;">
+<span class="c-green">🟢 แรงซื้อวันนี้: {m_data['d1_buy_pct']}%</span>
+<span class="c-red">🔴 แรงขายวันนี้: {m_data['d1_sell_pct']}%</span>
+</div>
+<div class="flow-meter-container">
+<div class="flow-buy-bar" style="width:{m_data['d1_buy_pct']}%;">{m_data['d1_buy_pct']}%</div>
+<div class="flow-sell-bar" style="width:{m_data['d1_sell_pct']}%;">{m_data['d1_sell_pct']}%</div>
+</div>
+<div class="flow-grid-3">
+<div class="flow-sub-card">
+<div style="font-size:0.7rem; color:#94A3B8;">รายวัน (1D)</div>
+<div style="font-size:0.85rem; font-weight:800; color:{'#10B981' if m_data['d1_buy_pct']>=50 else '#F43F5E'};">{'ซื้อหนุน' if m_data['d1_buy_pct']>=50 else 'ขายกดดัน'}</div>
+<div style="font-size:0.72rem; color:#cbd5e1;">สุทธิ {m_data['d1_buy_pct']}%</div>
+</div>
+<div class="flow-sub-card">
+<div style="font-size:0.7rem; color:#94A3B8;">รายสัปดาห์ (1W)</div>
+<div style="font-size:0.85rem; font-weight:800; color:{'#10B981' if m_data['w1_buy_pct']>=50 else '#F43F5E'};">{'ซื้อสะสม' if m_data['w1_buy_pct']>=50 else 'ขายสะสม'}</div>
+<div style="font-size:0.72rem; color:#cbd5e1;">ซื้อ {m_data['w1_buy_pct']}%</div>
+</div>
+<div class="flow-sub-card">
+<div style="font-size:0.7rem; color:#94A3B8;">รายเดือน (1M)</div>
+<div style="font-size:0.85rem; font-weight:800; color:{'#10B981' if m_data['m1_buy_pct']>=50 else '#F43F5E'};">{'ขาขึ้นคุม' if m_data['m1_buy_pct']>=50 else 'ขาลงคุม'}</div>
+<div style="font-size:0.72rem; color:#cbd5e1;">ซื้อ {m_data['m1_buy_pct']}%</div>
+</div>
+</div>
+</div>"""
+                st.markdown(html_flow_card, unsafe_allow_html=True)
 
 
 # --- TAB 2: ค้นหา & วิเคราะห์หุ้นรายตัว ---
@@ -1394,7 +1353,7 @@ with tab3:
                     'pattern_name', 'Support 1 ($)', 'Support 2 ($)', 'Support 3 ($)', 'RSI', 
                     'Resist 1 ($)', 'Resist 2 ($)', 'Resist 3 ($)', 'Resist 4 ($)', 'Date'
                 ]
-                available_fx_cols = [c for c in cols_to_show_fx if c in df_fx_display.columns]
+                available_fx_cols = [c for c in cols_to_show_fx if c in df_display_filtered.columns] if 'df_display_filtered' in locals() else [c for c in cols_to_show_fx if c in df_fx_display.columns]
                 server_state["forex_df"] = df_fx_display[available_fx_cols]
             st.rerun()
 
@@ -1441,7 +1400,7 @@ with tab3:
             st.dataframe(server_state["forex_df"], use_container_width=True, hide_index=True, height=220)
 
 
-# --- TAB ใหม่ 5: ข่าวเด่นเศรษฐกิจ & ปัจจัยตลาดหุ้น (Macro Market News) ---
+# --- TAB 5: ข่าวเด่นเศรษฐกิจ & ปัจจัยตลาดหุ้น (Macro Market News) ---
 with tab_news:
     st.markdown("### 📰 ข่าวเด่นเศรษฐกิจมหภาค & ปัจจัยกระทบตลาดหุ้น (Macro News)")
     st.caption("อัปเดตข่าวสารทิศทางดอกเบี้ย Fed, เศรษฐกิจสหรัฐฯ และความเคลื่อนไหวตลาดการเงินโลก (คลิกเพื่ออ่านข่าวต้นฉบับ)")
