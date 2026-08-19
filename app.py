@@ -26,7 +26,7 @@ PLOTLY_CONFIG = {
 
 UI_LANG_MAP = {
     'search_ticker_title': "US Stock & Forex Scanner PRO (by.Jetsada)",
-    'search_ticker_subtitle': "ระบบสแกนเทคนิคอล • คำนวณ % โครงสร้างราคา • AI Pattern • 3 แนวรับ 4 แนวต้าน",
+    'search_ticker_subtitle': "ระบบสแกนเทคนิคอล • วิเคราะห์กระแสเงิน Nasdaq & S&P500 • AI Pattern • Forex & ทองคำ",
     'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB, AAOI, RXT, CRWV, BZAI, TSM):",
     'search_forex_label': "พิมพ์คู่เงินหรือสินทรัพย์ (เช่น XAUUSD, EURUSD, GBPUSD, USDJPY, BTCUSD, USOIL):",
     'btn_analyze_single': "🔎 วิเคราะห์ทันที",
@@ -38,9 +38,11 @@ UI_LANG_MAP = {
     'expander_business_summary': "📖 สรุปธุรกิจ & โครงสร้างผู้ถือหุ้น (แปลไทยอัตโนมัติ)",
     'chart_title_single': "📈 กราฟเทคนิค 3 แนวรับ และ 4 ระดับแนวต้าน",
     'analysis_title': "📊 ข้อมูลแนวรับ - แนวต้าน & ตัวชี้วัดสำคัญ",
+    'tab_market_flow': "🏛️ ทิศทางตลาด Nasdaq & S&P 500",
     'tab_search_ticker': "🔍 ค้นหา & วิเคราะห์หุ้นรายตัว",
     'tab_scan_market': "🚀 สแกนคัดหุ้นทรงสวย",
     'tab_forex': "💱 วิเคราะห์ Forex & ทองคำ (XAUUSD)",
+    'tab_macro_news': "📰 ข่าวสารเศรษฐกิจ & ปัจจัยตลาดหุ้น",
 }
 
 SECTOR_MAP_TH = {
@@ -63,7 +65,6 @@ SECTOR_MAP_TH = {
     'Utilities': '💡 สาธารณูปโภค / ไฟฟ้า & ประปา'
 }
 
-# รายชื่อคู่เงิน Forex และสินค้าโภคภัณฑ์ยอดนิยม
 FOREX_DIRECTORY = [
     {'ticker': 'XAUUSD', 'name': 'Gold Spot / US Dollar (ทองคำ)', 'type': 'Commodity', 'exchange': 'Precious Metals'},
     {'ticker': 'EURUSD', 'name': 'Euro / US Dollar', 'type': 'Major Forex', 'exchange': 'Forex Market'},
@@ -160,41 +161,13 @@ st.markdown(
         line-height: 1.5;
         box-shadow: 0 3px 8px rgba(0,0,0,0.25);
     }
-    .status-banner-uptrend {
-        background-color: #022c22 !important;
-        border: 1.5px solid #10b981 !important;
-        color: #a7f3d0 !important;
-    }
-    .status-banner-pullback {
-        background-color: #451a03 !important;
-        border: 1.5px solid #f59e0b !important;
-        color: #fef08a !important;
-    }
-    .status-banner-support {
-        background-color: #172554 !important;
-        border: 1.5px solid #38bdf8 !important;
-        color: #bae6fd !important;
-    }
-    .status-banner-sideways {
-        background-color: #1e293b !important;
-        border: 1.5px solid #94a3b8 !important;
-        color: #f1f5f9 !important;
-    }
-    .status-banner-downtrend {
-        background-color: #4c0519 !important;
-        border: 1.5px solid #f43f5e !important;
-        color: #fecdd3 !important;
-    }
-    .status-title-text {
-        font-size: 1.0rem;
-        font-weight: 800;
-        margin-bottom: 4px;
-        letter-spacing: -0.2px;
-    }
-    .status-desc-text {
-        font-size: 0.84rem;
-        opacity: 0.95;
-    }
+    .status-banner-uptrend { background-color: #022c22 !important; border: 1.5px solid #10b981 !important; color: #a7f3d0 !important; }
+    .status-banner-pullback { background-color: #451a03 !important; border: 1.5px solid #f59e0b !important; color: #fef08a !important; }
+    .status-banner-support { background-color: #172554 !important; border: 1.5px solid #38bdf8 !important; color: #bae6fd !important; }
+    .status-banner-sideways { background-color: #1e293b !important; border: 1.5px solid #94a3b8 !important; color: #f1f5f9 !important; }
+    .status-banner-downtrend { background-color: #4c0519 !important; border: 1.5px solid #f43f5e !important; color: #fecdd3 !important; }
+    .status-title-text { font-size: 1.0rem; font-weight: 800; margin-bottom: 4px; letter-spacing: -0.2px; }
+    .status-desc-text { font-size: 0.84rem; opacity: 0.95; }
 
     .compact-board {
         background: #0B132B;
@@ -213,33 +186,14 @@ st.markdown(
         border-bottom: 1px solid #1E293B;
         margin-bottom: 8px;
     }
-    .price-val-box {
-        display: flex;
-        align-items: baseline;
-        gap: 6px;
-    }
-    .price-main {
-        font-size: 1.45rem;
-        font-weight: 900;
-        color: #F8FAFC;
-    }
-    .price-badge-group {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        align-items: center;
-    }
-    .price-badge {
-        font-size: 0.76rem;
-        padding: 3px 8px;
-        border-radius: 6px;
-        font-weight: 700;
-        white-space: nowrap;
-    }
+    .price-val-box { display: flex; align-items: baseline; gap: 6px; }
+    .price-main { font-size: 1.45rem; font-weight: 900; color: #F8FAFC; }
+    .price-badge-group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .price-badge { font-size: 0.76rem; padding: 3px 8px; border-radius: 6px; font-weight: 700; white-space: nowrap; }
     .badge-rsi { background: #1E293B; color: #38BDF8; border: 1px solid #334155; }
     .badge-dist { background: #064E3B; color: #34D399; border: 1px solid #059669; }
     
-    /* ป้ายสถานะแบบมีสีสันชัดเจนใน Compact Board */
+    /* ป้ายสถานะแบบมีสีสันคมชัดสูง High Contrast */
     .badge-board-uptrend { background: #059669 !important; color: #FFFFFF !important; border: 1.5px solid #34D399 !important; font-weight: 800 !important; }
     .badge-board-pullback { background: #D97706 !important; color: #FFFFFF !important; border: 1.5px solid #FCD34D !important; font-weight: 800 !important; }
     .badge-board-support { background: #0284C7 !important; color: #FFFFFF !important; border: 1.5px solid #38BDF8 !important; font-weight: 800 !important; }
@@ -249,32 +203,10 @@ st.markdown(
     .badge-ai-box { background: #172554; color: #93C5FD; border: 1px solid #1E40AF; font-weight: 700; }
     .badge-market { background: #1e1b4b; color: #c7d2fe; border: 1px solid #4338ca; font-weight: 700; }
 
-    .snr-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-    }
-    .snr-card {
-        background: #0F172A;
-        border: 1px solid #1E293B;
-        border-radius: 6px;
-        padding: 6px 8px;
-    }
-    .snr-card-title {
-        font-size: 0.7rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        margin-bottom: 4px;
-        padding-bottom: 3px;
-        border-bottom: 1px dashed #334155;
-    }
-    .snr-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 0.76rem;
-        padding: 2px 0;
-    }
+    .snr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .snr-card { background: #0F172A; border: 1px solid #1E293B; border-radius: 6px; padding: 6px 8px; }
+    .snr-card-title { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; padding-bottom: 3px; border-bottom: 1px dashed #334155; }
+    .snr-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.76rem; padding: 2px 0; }
     .snr-lbl { color: #94A3B8; font-size: 0.72rem; }
     .snr-num { font-weight: 700; font-size: 0.82rem; }
     
@@ -285,110 +217,70 @@ st.markdown(
     .c-yellow { color: #FBBF24 !important; }
     .c-darkred { color: #F43F5E !important; }
 
-    .strategy-card {
-        background: #0F172A;
-        border: 1px solid #1E293B;
-        border-radius: 8px;
-        padding: 8px 12px;
-        margin-bottom: 6px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    }
+    .strategy-card { background: #0F172A; border: 1px solid #1E293B; border-radius: 8px; padding: 8px 12px; margin-bottom: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
     .strat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
     .strat-title { font-size: 0.82rem; font-weight: 700; color: #F8FAFC; }
     .strat-price { font-size: 0.95rem; font-weight: 800; color: #38BDF8; }
-    .strat-body {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 0.74rem;
-        padding-top: 4px;
-        border-top: 1px dashed #1E293B;
-        flex-wrap: wrap;
-        gap: 4px;
-    }
+    .strat-body { display: flex; justify-content: space-between; align-items: center; font-size: 0.74rem; padding-top: 4px; border-top: 1px dashed #1E293B; flex-wrap: wrap; gap: 4px; }
     .strat-sub { color: #94A3B8; }
     .strat-val { color: #F8FAFC; font-weight: 600; }
 
     .company-header { font-size: 1.15rem; font-weight: 800; color: #38BDF8 !important; margin-bottom: 0rem; }
-    .sector-badge {
-        font-size: 0.75rem;
-        font-weight: 600;
-        color: #FCD34D;
-        background: #451A03;
-        border: 1px solid #78350F;
-        padding: 3px 7px;
-        border-radius: 5px;
-        display: inline-block;
-        margin-top: 3px;
-        margin-bottom: 4px;
-    }
-    .chart-header-badge {
-        font-size: 0.82rem;
-        font-weight: 700;
-        color: #F8FAFC;
-        background-color: #1E293B;
-        padding: 4px 7px;
-        border-radius: 5px;
-        margin-bottom: 3px;
-        display: inline-block;
-    }
-    .fin-card {
-        background: #0F172A !important;
-        border: 1px solid #334155 !important;
-        border-radius: 8px;
-        padding: 10px 12px;
-        margin-bottom: 0.4rem;
-        color: #F8FAFC !important;
-    }
-    .biz-summary {
-        font-size: 0.86rem !important;
-        color: #F8FAFC !important;
-        background-color: #0B132B !important;
-        padding: 12px 14px !important;
-        border-radius: 8px;
-        border-left: 4px solid #3B82F6 !important;
-        border: 1px solid #334155 !important;
-        margin-top: 6px;
-        margin-bottom: 0.5rem;
-        line-height: 1.6;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    }
-    .pattern-box {
-        background-color: #172554 !important;
-        color: #93C5FD !important;
-        padding: 5px 8px;
-        border-radius: 6px;
-        font-size: 0.74rem;
-        font-weight: 600;
-        border: 1px solid #1E40AF !important;
-        margin-top: 3px;
-        margin-bottom: 4px;
-    }
-    .news-card {
-        background: #0F172A;
-        border: 1px solid #1E293B;
-        border-radius: 6px;
-        padding: 8px 12px;
-        margin-bottom: 6px;
-    }
-    .news-title {
-        font-size: 0.84rem;
-        font-weight: 600;
-        color: #60A5FA !important;
-        text-decoration: none;
-        display: block;
-        margin-bottom: 3px;
-    }
-    .news-title:hover { text-decoration: underline; }
-    .news-meta { font-size: 0.72rem; color: #94A3B8; }
+    .sector-badge { font-size: 0.75rem; font-weight: 600; color: #FCD34D; background: #451A03; border: 1px solid #78350F; padding: 3px 7px; border-radius: 5px; display: inline-block; margin-top: 3px; margin-bottom: 4px; }
+    .chart-header-badge { font-size: 0.82rem; font-weight: 700; color: #F8FAFC; background-color: #1E293B; padding: 4px 7px; border-radius: 5px; margin-bottom: 3px; display: inline-block; }
+    .fin-card { background: #0F172A !important; border: 1px solid #334155 !important; border-radius: 8px; padding: 10px 12px; margin-bottom: 0.4rem; color: #F8FAFC !important; }
+    .biz-summary { font-size: 0.86rem !important; color: #F8FAFC !important; background-color: #0B132B !important; padding: 12px 14px !important; border-radius: 8px; border-left: 4px solid #3B82F6 !important; border: 1px solid #334155 !important; margin-top: 6px; margin-bottom: 0.5rem; line-height: 1.6; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    .pattern-box { background-color: #172554 !important; color: #93C5FD !important; padding: 5px 8px; border-radius: 6px; font-size: 0.74rem; font-weight: 600; border: 1px solid #1E40AF !important; margin-top: 3px; margin-bottom: 4px; }
     
+    /* สไตล์การ์ด Flow ตลาด */
+    .market-flow-card {
+        background: #0B132B;
+        border: 1px solid #1E293B;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 12px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
+    .flow-meter-container {
+        background: #1E293B;
+        border-radius: 8px;
+        height: 20px;
+        width: 100%;
+        display: flex;
+        overflow: hidden;
+        margin: 6px 0 10px 0;
+        border: 1px solid #334155;
+    }
+    .flow-buy-bar { background: linear-gradient(90deg, #10B981, #059669); height: 100%; text-align: center; color: #fff; font-size: 0.7rem; font-weight: bold; line-height: 20px; }
+    .flow-sell-bar { background: linear-gradient(90deg, #E11D48, #BE123C); height: 100%; text-align: center; color: #fff; font-size: 0.7rem; font-weight: bold; line-height: 20px; }
+    .flow-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 8px; }
+    .flow-sub-card { background: #0F172A; border: 1px solid #1E293B; border-radius: 8px; padding: 10px; text-align: center; }
+
+    /* สไตล์ข่าวสาร */
+    .news-card-link {
+        background: #0B132B;
+        border: 1px solid #1E293B;
+        border-radius: 8px;
+        padding: 12px 14px;
+        margin-bottom: 8px;
+        display: block;
+        text-decoration: none;
+        transition: all 0.2s ease-in-out;
+    }
+    .news-card-link:hover {
+        border-color: #3B82F6;
+        transform: translateX(3px);
+        background: #0F172A;
+    }
+    .news-card-title { font-size: 0.88rem; font-weight: 700; color: #60A5FA !important; margin-bottom: 4px; line-height: 1.4; }
+    .news-card-meta { font-size: 0.72rem; color: #94A3B8; }
+
     .desktop-only-space { height: 28px; display: block; }
     @media (max-width: 640px) {
         .desktop-only-space { display: none !important; }
         .main-title { font-size: 1.3rem !important; }
         .price-main { font-size: 1.3rem; }
-        .snr-row { font-size: 0.72rem; }
-        .snr-num { font-size: 0.78rem; }
+        .flow-grid-3 { grid-template-columns: 1fr; }
         .block-container { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
     }
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
@@ -400,7 +292,118 @@ st.markdown(
 st.markdown(f'<div class="main-title">{UI_LANG_MAP["search_ticker_title"]}</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="sub-title">{UI_LANG_MAP["search_ticker_subtitle"]}</div>', unsafe_allow_html=True)
 
-# ================= 4. ระบบแปลงสัญลักษณ์ Forex / สินค้าโภคภัณฑ์ =================
+# ================= 4. ฟังก์ชันวิเคราะห์ทิศทางและกระแสเงินตลาด (Nasdaq & S&P 500) =================
+@st.cache_data(ttl=900, show_spinner=False)
+def calculate_market_flow(index_symbol, index_name):
+    try:
+        stock = yf.Ticker(index_symbol, session=get_yfinance_session())
+        df = stock.history(period="3mo", interval="1d")
+        if df is None or df.empty or len(df) < 25:
+            return None
+        
+        # คำนวณ Money Flow Multiplier (MFM) & Buy/Sell Volume
+        high = df['High']
+        low = df['Low']
+        close = df['Close']
+        vol = df['Volume']
+        
+        price_range = (high - low).replace(0, 1e-4)
+        mfm = ((close - low) - (high - close)) / price_range
+        
+        buy_vol = vol * ((1.0 + mfm) / 2.0)
+        sell_vol = vol * ((1.0 - mfm) / 2.0)
+        
+        # 1. ข้อมูลรายวัน (1 วันล่าสุด)
+        d1_buy = float(buy_vol.iloc[-1])
+        d1_sell = float(sell_vol.iloc[-1])
+        d1_tot = max(1.0, d1_buy + d1_sell)
+        d1_buy_pct = round((d1_buy / d1_tot) * 100, 1)
+        d1_sell_pct = round(100.0 - d1_buy_pct, 1)
+        
+        # 2. ข้อมูลรายสัปดาห์ (5 วันทำการ)
+        w1_buy = float(buy_vol.tail(5).sum())
+        w1_sell = float(sell_vol.tail(5).sum())
+        w1_tot = max(1.0, w1_buy + w1_sell)
+        w1_buy_pct = round((w1_buy / w1_tot) * 100, 1)
+        w1_sell_pct = round(100.0 - w1_buy_pct, 1)
+        
+        # 3. ข้อมูลรายเดือน (21 วันทำการ)
+        m1_buy = float(buy_vol.tail(21).sum())
+        m1_sell = float(sell_vol.tail(21).sum())
+        m1_tot = max(1.0, m1_buy + m1_sell)
+        m1_buy_pct = round((m1_buy / m1_tot) * 100, 1)
+        m1_sell_pct = round(100.0 - m1_buy_pct, 1)
+        
+        latest_price = round(float(close.iloc[-1]), 2)
+        prev_price = float(close.iloc[-2])
+        chg_pct = round(((latest_price - prev_price) / prev_price) * 100, 2)
+        
+        # สรุปสภาวะตลาด
+        if d1_buy_pct >= 58 and w1_buy_pct >= 54:
+            market_state = "🚀 แรงซื้อครอบงำตลาด (Strong Bullish Accumulation)"
+            state_desc = "กระแสเงินไหลเข้าสะสมอย่างหนาแน่นทั้งรายวันและรายสัปดาห์ โมเมนตัมฝั่งซื้อได้เปรียบสูง"
+            state_color = "#10B981"
+        elif d1_sell_pct >= 58 and w1_sell_pct >= 54:
+            market_state = "📉 แรงขายเทกระจายของ (Heavy Distribution / Bearish)"
+            state_desc = "กระแสเงินไหลออกต่อเนื่อง มีแรงเทขายทำกำไรกดดันดัชนีหลัก ควรเพิ่มความระมัดระวัง"
+            state_color = "#F43F5E"
+        elif d1_buy_pct >= 52:
+            market_state = "⏳ พักฐานสะสมแรง / ลุ้นดีดตัว (Healthy Pullback Flow)"
+            state_desc = "ดัชนีมีแรงซื้อหยั่งเชิงพยุงตลาด ยอดสะสมรายสัปดาห์ทรงตัวในกรอบสะสมพลัง"
+            state_color = "#F59E0B"
+        else:
+            market_state = "〰️ ตลาดไซด์เวย์แกว่งตัวรอทิศทาง (Neutral / Choppy)"
+            state_desc = "แรงซื้อและแรงขายใกล้เคียงกัน ดัชนีแกว่งตัวในกรอบแคบเพื่อรอปัจจัยหนุนใหม่"
+            state_color = "#94A3B8"
+            
+        return {
+            'symbol': index_symbol,
+            'name': index_name,
+            'price': latest_price,
+            'chg_pct': chg_pct,
+            'd1_buy_pct': d1_buy_pct, 'd1_sell_pct': d1_sell_pct,
+            'w1_buy_pct': w1_buy_pct, 'w1_sell_pct': w1_sell_pct,
+            'm1_buy_pct': m1_buy_pct, 'm1_sell_pct': m1_sell_pct,
+            'market_state': market_state,
+            'state_desc': state_desc,
+            'state_color': state_color,
+            'date': df.index[-1].strftime('%d/%m/%Y')
+        }
+    except Exception:
+        return None
+
+# ================= 5. ฟังก์ชันดึงข่าวสารเศรษฐกิจมหภาค (Macro News) =================
+@st.cache_data(ttl=900, show_spinner=False)
+def get_macro_market_news():
+    results = []
+    feeds = [
+        "https://feeds.finance.yahoo.com/rss/2.0/headline?s=^GSPC,^IXIC,SPY,QQQ&region=US&lang=en-US",
+        "https://feeds.finance.yahoo.com/rss/2.0/headline?s=GC=F,CL=F,DX-Y.NYB&region=US&lang=en-US"
+    ]
+    for url in feeds:
+        try:
+            res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3.5)
+            if res.status_code == 200:
+                root = ET.fromstring(res.content)
+                for item in root.findall('./channel/item')[:4]:
+                    t_node, l_node, p_node = item.find('title'), item.find('link'), item.find('pubDate')
+                    raw_title = t_node.text if t_node is not None else ""
+                    raw_link = l_node.text if l_node is not None else "#"
+                    raw_pub = p_node.text[:16] if p_node is not None else ""
+                    if raw_title and not any(r['link'] == raw_link for r in results):
+                        title_th = translate_text_to_thai(raw_title)
+                        results.append({
+                            'title': title_th if title_th else raw_title,
+                            'title_en': raw_title,
+                            'link': raw_link,
+                            'time': raw_pub
+                        })
+        except Exception:
+            pass
+        if len(results) >= 8: break
+    return results
+
+# ================= 6. ระบบแปลงสัญลักษณ์ & ฐานข้อมูลหุ้น =================
 def resolve_financial_symbol(ticker_str):
     raw = str(ticker_str).strip().upper()
     mapping = {
@@ -419,7 +422,6 @@ def resolve_financial_symbol(ticker_str):
         return f"{raw}=X", raw
     return raw, raw
 
-# ================= 5. ระบบดึงรายชื่อหุ้นผู้นำตลาด =================
 @st.cache_data(ttl=86400)
 def get_us_stock_directory(scope="TOP500"):
     master_directory = [
@@ -445,9 +447,11 @@ def get_us_stock_directory(scope="TOP500"):
         {'ticker': 'RKLB', 'name': 'Rocket Lab USA, Inc.', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'เทคโนโลยีปล่อยจรวดและอวกาศ', 'exchange': 'NASDAQ'},
         {'ticker': 'JPM', 'name': 'JPMorgan Chase & Co.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'ธนาคารพาณิชย์ระดับโลก', 'exchange': 'NYSE'},
         {'ticker': 'V', 'name': 'Visa Inc.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'เครือข่ายการชำระเงินดิจิทัล', 'exchange': 'NYSE'},
+        {'ticker': 'MA', 'name': 'Mastercard Incorporated', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'บริการชำระเงินระดับโลก', 'exchange': 'NYSE'},
         {'ticker': 'LLY', 'name': 'Eli Lilly and Company', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'เวชภัณฑ์และยารักษาโรค', 'exchange': 'NYSE'},
         {'ticker': 'UNH', 'name': 'UnitedHealth Group Incorporated', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'ประกันสุขภาพและบริการทางการแพทย์', 'exchange': 'NYSE'},
         {'ticker': 'XOM', 'name': 'Exxon Mobil Corporation', 'sector': '⚡ พลังงาน / น้ำมัน & ก๊าซ', 'industry': 'สำรวจและผลิตน้ำมัน & ก๊าซธรรมชาติ', 'exchange': 'NYSE'},
+        {'ticker': 'CVX', 'name': 'Chevron Corporation', 'sector': '⚡ พลังงาน / น้ำมัน & ก๊าซ', 'industry': 'พลังงานปิโตรเลียมครบวงจร', 'exchange': 'NYSE'},
         {'ticker': 'WMT', 'name': 'Walmart Inc.', 'sector': '🛒 สินค้าอุปโภคบริโภคจำเป็น', 'industry': 'ค้าปลีกและซูเปอร์เซ็นเตอร์', 'exchange': 'NYSE'},
         {'ticker': 'COST', 'name': 'Costco Wholesale Corporation', 'sector': '🛒 สินค้าอุปโภคบริโภคจำเป็น', 'industry': 'คลังสินค้าสมาชิกค้าปลีก', 'exchange': 'NASDAQ'},
         {'ticker': 'MSTR', 'name': 'MicroStrategy Incorporated', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ซอฟต์แวร์องค์กรและสินทรัพย์บิตคอยน์', 'exchange': 'NASDAQ'},
@@ -460,13 +464,11 @@ def get_us_stock_directory(scope="TOP500"):
     ]
     return master_directory
 
-# ================= 6. ฟังก์ชันดึงประวัติราคาความเร็วสูง =================
+# ================= 7. ฟังก์ชันดึงประวัติราคาและคำนวณเทคนิคอล =================
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_stock_history_dual(ticker):
     resolved_ticker, display_name = resolve_financial_symbol(ticker)
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-    }
+    headers = {'User-Agent': 'Mozilla/5.0'}
     try:
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{resolved_ticker}?range=6mo&interval=1d"
         res = requests.get(url, headers=headers, timeout=3.5)
@@ -482,13 +484,10 @@ def fetch_stock_history_dual(ticker):
                 short_name = meta.get('shortName', meta.get('longName', display_name))
                 if timestamps and quote:
                     df = pd.DataFrame({
-                        'open': quote.get('open', []),
-                        'high': quote.get('high', []),
-                        'low': quote.get('low', []),
-                        'close': quote.get('close', []),
+                        'open': quote.get('open', []), 'high': quote.get('high', []),
+                        'low': quote.get('low', []), 'close': quote.get('close', []),
                         'volume': quote.get('volume', [])
-                    }, index=pd.to_datetime(timestamps, unit='s'))
-                    df = df.dropna(subset=['close'])
+                    }, index=pd.to_datetime(timestamps, unit='s')).dropna(subset=['close'])
                     if len(df) >= 15:
                         market_tag = "NASDAQ" if "NMS" in exchange_name or "NGM" in exchange_name or "NASDAQ" in exchange_name.upper() else ("NYSE" if "NYQ" in exchange_name or "NYSE" in exchange_name.upper() else ("AMEX" if "ASE" in exchange_name or "AMEX" in exchange_name.upper() else ("Commodity/Forex" if "CCY" in exchange_name or "CMX" in exchange_name or "=" in resolved_ticker else "Global Market")))
                         return df, market_tag, short_name
@@ -505,18 +504,14 @@ def fetch_stock_history_dual(ticker):
             return df, "Global Market", display_name
     except Exception:
         pass
-
     return None, "Global Market", display_name
-
 
 def calculate_swing_snr(df, latest_close):
     n = len(df)
     window_n = min(n, 120)
     df_wave = df.iloc[-window_n:]
-    highs = df_wave['high'].values
-    lows = df_wave['low'].values
-    wave_high = float(np.max(highs))
-    wave_low = float(np.min(lows))
+    highs, lows = df_wave['high'].values, df_wave['low'].values
+    wave_high, wave_low = float(np.max(highs)), float(np.min(lows))
     wave_range = max(1e-4, wave_high - wave_low)
 
     fib_236 = wave_high - 0.236 * wave_range
@@ -549,10 +544,8 @@ def calculate_swing_snr(df, latest_close):
     elif len(valid_resists) == 1: r1 = valid_resists[0]; r2 = r1 + (r4 - r1) * 0.35; r3 = r1 + (r4 - r1) * 0.70
     else: r1 = latest_close * 1.06; r2 = latest_close * 1.15; r3 = latest_close * 1.25
 
-    # จัดการทศนิยมให้เหมาะสมกับค่าเงิน (Forex 4 ตำแหน่ง, หุ้น/ทองคำ 2 ตำแหน่ง)
     decimals = 4 if latest_close < 2.0 else 2
     return round(s1, decimals), round(s2, decimals), round(s3, decimals), round(r1, decimals), round(r2, decimals), round(r3, decimals), round(r4, decimals)
-
 
 def calculate_ai_pattern_match(df):
     try:
@@ -578,12 +571,10 @@ def calculate_ai_pattern_match(df):
             if np.isnan(corr): corr = 0.5
             sim_score = (max(0.0, 1.0 - mae) * 0.65 + max(0.0, (corr + 1.0) / 2.0) * 0.35) * 100.0
             if sim_score > best_score:
-                best_score = sim_score
-                best_pattern = pat_name
+                best_score, best_pattern = sim_score, pat_name
         return best_pattern, round(max(70.0, min(95.5, best_score)), 1)
     except Exception:
         return "สร้างฐานสะสมกำลัง.png", 76.5
-
 
 def get_time_elapsed_thai(last_dt):
     if not last_dt: return ""
@@ -592,7 +583,6 @@ def get_time_elapsed_thai(last_dt):
     if secs < 60: return f" (เพิ่งสแกนเมื่อ {secs} วิที่แล้ว)"
     elif secs < 3600: return f" (สแกนไปแล้ว {secs // 60} นาทีที่แล้ว)"
     else: return f" (สแกนไปแล้ว {secs // 3600} ชม. ก่อน)"
-
 
 def translate_text_to_thai(text):
     if not text or text == 'N/A' or not str(text).strip(): return ''
@@ -606,7 +596,6 @@ def translate_text_to_thai(text):
     except Exception: pass
     return str(text_sample)
 
-
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_company_info_and_holders(ticker):
     resolved_ticker, display_name = resolve_financial_symbol(ticker)
@@ -618,7 +607,6 @@ def get_company_info_and_holders(ticker):
             res_json = r.json().get('quoteSummary', {}).get('result', [{}])[0]
             profile = res_json.get('assetProfile', {})
             stats = res_json.get('defaultKeyStatistics', {})
-
             raw_summary = profile.get('longBusinessSummary', '')
             raw_sector = profile.get('sector', 'N/A')
             raw_industry = profile.get('industry', 'N/A')
@@ -633,9 +621,7 @@ def get_company_info_and_holders(ticker):
 
             return {
                 'longNameEn': profile.get('longName', display_name),
-                'sectorTh': sector_th,
-                'industryTh': industry_th,
-                'summaryTh': th_summary,
+                'sectorTh': sector_th, 'industryTh': industry_th, 'summaryTh': th_summary,
                 'sharesOutstanding': f"{shares_out:,.0f}" if shares_out else "N/A",
                 'institutionalHeld': f"{inst_held*100:.2f}%" if inst_held else "N/A",
                 'insiderHeld': f"{insider_held*100:.2f}%" if insider_held else "N/A",
@@ -643,38 +629,7 @@ def get_company_info_and_holders(ticker):
             }
     except Exception:
         pass
-    
-    try:
-        stock = yf.Ticker(resolved_ticker, session=get_yfinance_session())
-        info = stock.info
-        if info and len(info) > 5:
-            raw_summary = info.get('longBusinessSummary', '')
-            raw_sector = info.get('sector', 'N/A')
-            raw_industry = info.get('industry', 'N/A')
-            shares_out = info.get('sharesOutstanding', 0)
-            inst_held = info.get('heldPercentInstitutions', 0)
-            insider_held = info.get('heldPercentInsiders', 0)
-
-            th_summary = translate_text_to_thai(raw_summary) if raw_summary else 'N/A'
-            sector_th = SECTOR_MAP_TH.get(raw_sector, raw_sector)
-            industry_th = translate_text_to_thai(raw_industry) if raw_industry != 'N/A' else 'N/A'
-            retail_held_pct = f"{max(0.0, 100 - (inst_held + insider_held)*100):.2f}%" if inst_held or insider_held else "N/A"
-
-            return {
-                'longNameEn': info.get('longName', display_name),
-                'sectorTh': sector_th,
-                'industryTh': industry_th,
-                'summaryTh': th_summary,
-                'sharesOutstanding': f"{shares_out:,.0f}" if shares_out else "N/A",
-                'institutionalHeld': f"{inst_held*100:.2f}%" if inst_held else "N/A",
-                'insiderHeld': f"{insider_held*100:.2f}%" if insider_held else "N/A",
-                'retailHeld': retail_held_pct
-            }
-    except Exception:
-        pass
-
     return {'longNameEn': display_name, 'sectorTh': 'N/A', 'industryTh': 'N/A', 'summaryTh': 'N/A', 'sharesOutstanding': 'N/A', 'institutionalHeld': 'N/A', 'insiderHeld': 'N/A', 'retailHeld': 'N/A'}
-
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_stock_news(ticker):
@@ -696,7 +651,6 @@ def get_stock_news(ticker):
     except Exception: pass
     return results
 
-
 @st.cache_data(ttl=14400, show_spinner=False)
 def get_financials(ticker):
     resolved_ticker, _ = resolve_financial_symbol(ticker)
@@ -712,12 +666,9 @@ def get_financials(ticker):
                         'Quarter End': date.strftime('%Y-%m-%d'),
                         'Net Income (M$)': round(value / 1_000_000, 2)
                     })
-            if data:
-                return pd.DataFrame(data)
-    except Exception:
-        pass
+            if data: return pd.DataFrame(data)
+    except Exception: pass
     return None
-
 
 def create_ta_chart(df, ticker, res_data):
     if df is None or df.empty: return None
@@ -733,20 +684,19 @@ def create_ta_chart(df, ticker, res_data):
         if key in res_data:
             val = res_data[key]
             fig.add_shape(type="line", x0=df.index[0], y0=val, x1=df.index[-1], y1=val, line=dict(color=color, width=1.6, dash='dash'))
-            fig.add_annotation(x=df.index[-1], y=val, text=f"{key.replace(' ($)', '')}: {val}", bgcolor=color, font=dict(color="white", size=9), xanchor="left", ax=8, ay=ay_pos)
+            fig.add_annotation(x=df.index[-1], y=val, text=f"{key.replace(' ($)', '')}: ${val}", bgcolor=color, font=dict(color="white", size=9), xanchor="left", ax=8, ay=ay_pos)
 
     for key, color, ay_pos in [('Resist 1 ($)', '#EF4444', -12), ('Resist 2 ($)', '#F97316', 12), ('Resist 3 ($)', '#EAB308', -12), ('Resist 4 ($)', '#991B1B', 12)]:
         if key in res_data:
             val = res_data[key]
             fig.add_shape(type="line", x0=df.index[0], y0=val, x1=df.index[-1], y1=val, line=dict(color=color, width=1.6, dash='dash'))
-            fig.add_annotation(x=df.index[-1], y=val, text=f"{key.replace(' ($)', '')}: {val}", bgcolor=color, font=dict(color="white", size=9), xanchor="left", ax=8, ay=ay_pos)
+            fig.add_annotation(x=df.index[-1], y=val, text=f"{key.replace(' ($)', '')}: ${val}", bgcolor=color, font=dict(color="white", size=9), xanchor="left", ax=8, ay=ay_pos)
 
     fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
     fig.update_layout(xaxis_rangeslider_visible=False, template='plotly_dark', margin=dict(l=6, r=65, t=10, b=6), height=340, dragmode='pan', yaxis_title="ราคา", showlegend=False)
     return fig
 
-
-# ================= 7. ฟังก์ชันวิเคราะห์หลัก (ใช้ร่วมกันทั้งหุ้นและ Forex) =================
+# ================= 8. ฟังก์ชันวิเคราะห์หลัก =================
 @st.cache_data(ttl=3600, show_spinner=False)
 def check_ma_snr_combo(item_input, info_mode=False):
     try:
@@ -806,7 +756,7 @@ def check_ma_snr_combo(item_input, info_mode=False):
 
         dist_s1_pct = ((latest_close - s1) / s1) * 100
 
-        # ================= ตรรกะ 5 สภาวะตลาดแท้จริง =================
+        # จำแนก 5 สภาวะตลาดแท้จริง พร้อมเลือกคลาส Badge คมชัดสูง
         if (not is_above_ma20 and not is_above_ma50 and latest_rsi < 45) or drop_8d_pct <= -15.0:
             trend_status = "DOWNTREND"
             status_text = "📉 ลงแรง / ขาลงชัดเจน (ห้ามรับมีด)"
@@ -902,8 +852,7 @@ def check_ma_snr_combo(item_input, info_mode=False):
         pass
     return None, None
 
-
-# ================= 8. ฟังก์ชันช่วยเรนเดอร์ UI รายละเอียดวิเคราะห์ (นำมาใช้ซ้ำได้) =================
+# ================= 9. ฟังก์ชันช่วยเรนเดอร์ UI รายละเอียด =================
 def render_analysis_view(res, raw_df, df_profit, news_items, single_ticker, is_forex=False):
     company_full_name = res.get("longNameEn", single_ticker)
     sector_desc = res.get("sectorTh", "N/A")
@@ -929,14 +878,13 @@ def render_analysis_view(res, raw_df, df_profit, news_items, single_ticker, is_f
             st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG, key=f"chart_{single_ticker}_{is_forex}")
 
     st.markdown("---")
-    
     st.markdown(f"#### {UI_LANG_MAP['analysis_title']}")
+    
     badge_class = res.get('badge_class', 'badge-board-sideways')
     badge_label = res.get('badge_label', '〰️ สะสมแรง')
     pat_name = res.get('pattern_name', 'สร้างฐานสะสมกำลัง.png')
     pat_score = res.get('pattern_score', 75.0)
 
-    # แสดงผล Compact Board พร้อมป้ายสถานะสีสันชัดเจน
     st.markdown(f"""
     <div class="compact-board">
         <div class="price-banner">
@@ -979,10 +927,7 @@ def render_analysis_view(res, raw_df, df_profit, news_items, single_ticker, is_f
     st.markdown(f"""
     <div class="strategy-card" style="border-left: 4px solid #22C55E;">
         <div class="strat-header">
-            <div>
-                <span class="strat-title">🛡️ แนวรับ 1 (สวิงโลว์ใกล้สุด)</span>
-                <span style="font-size:0.75rem; color:#94A3B8; margin-left:6px;">({dist_s1:+.2f}%)</span>
-            </div>
+            <div><span class="strat-title">🛡️ แนวรับ 1 (สวิงโลว์ใกล้สุด)</span><span style="font-size:0.75rem; color:#94A3B8; margin-left:6px;">({dist_s1:+.2f}%)</span></div>
             <span class="strat-price" style="color:#22C55E;">{res.get('Support 1 ($)', 0)}</span>
         </div>
         <div class="strat-body">
@@ -993,10 +938,7 @@ def render_analysis_view(res, raw_df, df_profit, news_items, single_ticker, is_f
 
     <div class="strategy-card" style="border-left: 4px solid #16A34A;">
         <div class="strat-header">
-            <div>
-                <span class="strat-title">🛡️ แนวรับ 2 (ฐานสะสมหลัก)</span>
-                <span style="font-size:0.75rem; color:#94A3B8; margin-left:6px;">({dist_s2:+.2f}%)</span>
-            </div>
+            <div><span class="strat-title">🛡️ แนวรับ 2 (ฐานสะสมหลัก)</span><span style="font-size:0.75rem; color:#94A3B8; margin-left:6px;">({dist_s2:+.2f}%)</span></div>
             <span class="strat-price" style="color:#4ADE80;">{res.get('Support 2 ($)', 0)}</span>
         </div>
         <div class="strat-body">
@@ -1007,10 +949,7 @@ def render_analysis_view(res, raw_df, df_profit, news_items, single_ticker, is_f
 
     <div class="strategy-card" style="border-left: 4px solid #15803D;">
         <div class="strat-header">
-            <div>
-                <span class="strat-title">🛡️ แนวรับ 3 (ฐานโครงสร้างใหญ่)</span>
-                <span style="font-size:0.75rem; color:#94A3B8; margin-left:6px;">({dist_s3:+.2f}%)</span>
-            </div>
+            <div><span class="strat-title">🛡️ แนวรับ 3 (ฐานโครงสร้างใหญ่)</span><span style="font-size:0.75rem; color:#94A3B8; margin-left:6px;">({dist_s3:+.2f}%)</span></div>
             <span class="strat-price" style="color:#86EFAC;">{res.get('Support 3 ($)', 0)}</span>
         </div>
         <div class="strat-body">
@@ -1051,7 +990,6 @@ def render_analysis_view(res, raw_df, df_profit, news_items, single_ticker, is_f
             st.info("ℹ️ ไม่พบข้อมูลงบกำไรสุทธิย้อนหลังสำหรับสัญลักษณ์นี้")
 
         st.markdown("---")
-        
         summary_text = res.get('summaryTh', 'N/A')
         shares_tot = res.get('sharesOutstanding', 'N/A')
         inst_pct = res.get('institutionalHeld', 'N/A')
@@ -1073,15 +1011,90 @@ def render_analysis_view(res, raw_df, df_profit, news_items, single_ticker, is_f
                 </div>
             </div>
             """, unsafe_allow_html=True)
-
             if summary_text != 'N/A':
                  st.markdown(f'<div class="biz-summary">{summary_text}</div>', unsafe_allow_html=True)
 
+# ================= 10. ส่วนแสดงผล UI หน้าจอ (5 แท็บสมบูรณ์) =================
+tab_market, tab1, tab2, tab3, tab_news = st.tabs([
+    UI_LANG_MAP['tab_market_flow'],
+    UI_LANG_MAP['tab_search_ticker'],
+    UI_LANG_MAP['tab_scan_market'],
+    UI_LANG_MAP['tab_forex'],
+    UI_LANG_MAP['tab_macro_news']
+])
 
-# ================= 9. หน้าจอหลัก (3 แท็บ) =================
-tab1, tab2, tab3 = st.tabs([UI_LANG_MAP['tab_search_ticker'], UI_LANG_MAP['tab_scan_market'], UI_LANG_MAP['tab_forex']])
+# --- TAB ใหม่ 1: ทิศทางตลาด Nasdaq & S&P 500 (Buy-Sell Volume Flow) ---
+with tab_market:
+    st.markdown("### 🏛️ วิเคราะห์กระแสเงินและทิศทางตลาด (Nasdaq & S&P 500 Flow)")
+    st.caption("คำนวณสัดส่วนแรงซื้อ (Buy Volume) vs แรงขาย (Sell Volume) สะสมรายวัน รายสัปดาห์ และรายเดือน")
+    
+    if st.button("🔄 อัปเดตข้อมูลกระแสเงินสดตลาด", key="btn_refresh_market_flow"):
+        calculate_market_flow.clear()
+        st.rerun()
 
-# --- TAB 1: ค้นหา & วิเคราะห์หุ้นรายตัว ---
+    with st.spinner("⏳ กำลังคำนวณปริมาณแรงซื้อ-แรงขายของดัชนี Nasdaq (QQQ) และ S&P 500 (SPY)..."):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            f_qqq = executor.submit(calculate_market_flow, "QQQ", "Nasdaq 100 Index (QQQ)")
+            f_spy = executor.submit(calculate_market_flow, "SPY", "S&P 500 Index (SPY)")
+            data_qqq = f_qqq.result()
+            data_spy = f_spy.result()
+
+    col_m1, col_m2 = st.columns(2)
+    for col, m_data in zip([col_m1, col_m2], [data_qqq, data_spy]):
+        if m_data:
+            with col:
+                st.markdown(f"""
+                <div class="market-flow-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <span style="font-size:1.15rem; font-weight:800; color:#60A5FA;">📈 {m_data['name']}</span>
+                        <span style="font-size:1.1rem; font-weight:800; color:{'#10B981' if m_data['chg_pct'] >= 0 else '#F43F5E'};">${m_data['price']} ({m_data['chg_pct']:+.2f}%)</span>
+                    </div>
+                    <div style="font-size:0.9rem; font-weight:bold; color:{m_data['state_color']}; margin-bottom:4px;">
+                        {m_data['market_state']}
+                    </div>
+                    <div style="font-size:0.78rem; color:#94A3B8; margin-bottom:12px;">
+                        {m_data['state_desc']}
+                    </div>
+                    
+                    <!-- 1 วันล่าสุด -->
+                    <div style="display:flex; justify-content:space-between; font-size:0.75rem; font-weight:600;">
+                        <span class="c-green">🟢 แรงซื้อวันนี้: {m_data['d1_buy_pct']}%</span>
+                        <span class="c-red">🔴 แรงขายวันนี้: {m_data['d1_sell_pct']}%</span>
+                    </div>
+                    <div class="flow-meter-container">
+                        <div class="flow-buy-bar" style="width:{m_data['d1_buy_pct']}%;">{m_data['d1_buy_pct']}%</div>
+                        <div class="flow-sell-bar" style="width:{m_data['d1_sell_pct']}%;">{m_data['d1_sell_pct']}%</div>
+                    </div>
+
+                    <!-- สรุปเปรียบเทียบสัปดาห์ & เดือน -->
+                    <div class="flow-grid-3">
+                        <div class="flow-sub-card">
+                            <div style="font-size:0.7rem; color:#94A3B8;">รายวัน (1D)</div>
+                            <div style="font-size:0.85rem; font-weight:800; color:{'#10B981' if m_data['d1_buy_pct']>=50 else '#F43F5E'};">
+                                {'ซื้อหนุน' if m_data['d1_buy_pct']>=50 else 'ขายกดดัน'}
+                            </div>
+                            <div style="font-size:0.72rem; color:#cbd5e1;">สุทธิ {m_data['d1_buy_pct']}%</div>
+                        </div>
+                        <div class="flow-sub-card">
+                            <div style="font-size:0.7rem; color:#94A3B8;">รายสัปดาห์ (1W)</div>
+                            <div style="font-size:0.85rem; font-weight:800; color:{'#10B981' if m_data['w1_buy_pct']>=50 else '#F43F5E'};">
+                                {'ซื้อสะสม' if m_data['w1_buy_pct']>=50 else 'ขายสะสม'}
+                            </div>
+                            <div style="font-size:0.72rem; color:#cbd5e1;">ซื้อ {m_data['w1_buy_pct']}%</div>
+                        </div>
+                        <div class="flow-sub-card">
+                            <div style="font-size:0.7rem; color:#94A3B8;">รายเดือน (1M)</div>
+                            <div style="font-size:0.85rem; font-weight:800; color:{'#10B981' if m_data['m1_buy_pct']>=50 else '#F43F5E'};">
+                                {'ขาขึ้นคุม' if m_data['m1_buy_pct']>=50 else 'ขาลงคุม'}
+                            </div>
+                            <div style="font-size:0.72rem; color:#cbd5e1;">ซื้อ {m_data['m1_buy_pct']}%</div>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+
+# --- TAB 2: ค้นหา & วิเคราะห์หุ้นรายตัว ---
 with tab1:
     col_in1, col_in2 = st.columns([3, 1])
     with col_in1:
@@ -1107,7 +1120,7 @@ with tab1:
                 st.error(f"❌ ไม่พบข้อมูลสัญลักษณ์หุ้น **{single_ticker}** ในระบบ กรุณาตรวจสอบชื่อ Ticker อีกครั้ง")
 
 
-# --- TAB 2: สแกนคัดหุ้นทรงสวย (ทั้งตลาด) ---
+# --- TAB 3: สแกนคัดหุ้นทรงสวย (ทั้งตลาด) ---
 with tab2:
     st.markdown("### 🚀 สแกนหาหุ้นทรงสวยประจำวัน (NASDAQ, NYSE, AMEX)")
     
@@ -1135,9 +1148,6 @@ with tab2:
     with col_btn2:
         reset_btn = st.button("🔄 ปลดล็อก & รีเซ็ตระบบ", key="btn_reset_all")
 
-    if is_busy:
-        st.warning("⏳ **ระบบกำลังประมวลผลการสแกนอยู่** กรุณารอสักครู่ (หากค้างสามารถกดปุ่ม 'ปลดล็อก & รีเซ็ตระบบ' ได้ทันที)")
-
     if reset_btn:
         server_state["is_scanning"] = False
         server_state["scan_start_time"] = None
@@ -1150,7 +1160,6 @@ with tab2:
 
     if scan_btn and not is_busy:
         check_ma_snr_combo.clear()
-        
         server_state["is_scanning"] = True
         server_state["scan_start_time"] = datetime.now()
         status_text = st.empty()
@@ -1240,7 +1249,7 @@ with tab2:
             filtered_results.append(item)
 
         st.caption(f"📌 แสดงผลลัพธ์ที่ตรงตามเงื่อนไข: **{len(filtered_results)}** จากทั้งหมด **{total_found}** ตัว")
-        st.subheader('📸 แกลเลอรี่กราฟหุ้นทรงสวย (พร้อมรายละเอียดบริษัทและ AI Pattern Match)')
+        st.subheader('📸 แกลเลอรี่กราฟหุ้นทรงสวย')
         
         if filtered_results:
             items_per_page = 6
@@ -1266,41 +1275,30 @@ with tab2:
                         exchange_found = res_data.get('Exchange', 'US Market')
                         raw_df_found = item.get('raw_df')
                         status_lbl = res_data.get('status_text', '')
-                        status_box_class_gallery = res_data.get('status_box_class', 'status-banner-sideways')
+                        badge_status_class = res_data.get('badge_class', 'badge-board-sideways')
                         pat_found = res_data.get('pattern_name', 'สร้างฐานสะสมกำลัง.png')
                         pat_sc_found = res_data.get('pattern_score', 75.0)
-
-                        badge_status_class = "badge-board-sideways"
-                        if "uptrend" in status_box_class_gallery: badge_status_class = "badge-board-uptrend"
-                        elif "pullback" in status_box_class_gallery: badge_status_class = "badge-board-pullback"
-                        elif "support" in status_box_class_gallery: badge_status_class = "badge-board-support"
-                        elif "downtrend" in status_box_class_gallery: badge_status_class = "badge-board-downtrend"
 
                         with cols[c_offset]:
                             with st.container():
                                 st.markdown(f'<p style="font-size:0.95rem; font-weight:bold; color:#60A5FA; margin-bottom:2px;">🟢 {ticker_found} : {company_name_found} <span class="price-badge badge-market">🏛️ {exchange_found}</span></p>', unsafe_allow_html=True)
                                 st.markdown(f'<div class="sector-badge" style="font-size:0.72rem; padding:2px 6px; margin-bottom:4px;">🏷️ {sector_found} | ย่อย: {industry_found}</div>', unsafe_allow_html=True)
-                                
                                 st.markdown(f'<div style="margin-bottom:6px;"><span class="price-badge {badge_status_class}">{status_lbl}</span></div>', unsafe_allow_html=True)
-                                st.caption(f"Support 1: {res_data.get('Support 1 ($)', 0)} | ต้าน 1: {res_data.get('Resist 1 ($)', 0)} | RSI: {res_data.get('RSI', 0)}")
+                                st.caption(f"Support 1: ${res_data.get('Support 1 ($)', 0)} | ต้าน 1: ${res_data.get('Resist 1 ($)', 0)} | RSI: {res_data.get('RSI', 0)}")
                                 
                                 if raw_df_found is not None:
-                                    st.markdown(f'<div class="chart-header-badge">{ticker_found} ({exchange_found}) | ล่าสุด: {res_data.get("Price ($)", 0)} (RSI: {res_data.get("RSI", 0)})</div>', unsafe_allow_html=True)
+                                    st.markdown(f'<div class="chart-header-badge">{ticker_found} ({exchange_found}) | ล่าสุด: ${res_data.get("Price ($)", 0)} (RSI: {res_data.get("RSI", 0)})</div>', unsafe_allow_html=True)
                                     fig_gallery = create_ta_chart(raw_df_found, ticker_found, res_data)
                                     if fig_gallery:
                                         st.plotly_chart(fig_gallery, use_container_width=True, config=PLOTLY_CONFIG, key=f"gallery_chart_{ticker_found}_{page_num}_{item_idx}")
                                 
                                     st.markdown(f'<div class="pattern-box" style="font-size:0.72rem; padding:3px 6px;">🤖 AI Pattern: {pat_found} ({pat_sc_found}%)</div>', unsafe_allow_html=True)
-                                    
                                     if summary_found and summary_found != 'N/A':
                                         with st.expander(f"📖 สรุปลักษณะธุรกิจ {ticker_found}", expanded=False):
                                             st.markdown(f'<div class="biz-summary">{summary_found}</div>', unsafe_allow_html=True)
                                 else:
                                     st.warning("ไม่พบข้อมูลกราฟ")
-                                    
                                 st.markdown("<br>", unsafe_allow_html=True)
-        else:
-            st.warning("⚠️ ไม่พบหุ้นที่ตรงตามเงื่อนไขตัวกรองที่คุณเลือก ลองปรับตัวกรองเป็น 'ทั้งหมด' ครับ")
 
         st.markdown("---")
         st.markdown("#### 📊 ตารางสรุปสัญญาณราคาหุ้นทรงสวยประจำวัน")
@@ -1325,11 +1323,10 @@ with tab2:
             )
 
 
-# --- TAB 3: วิเคราะห์ Forex & ทองคำ (XAUUSD) ---
+# --- TAB 4: วิเคราะห์ Forex & ทองคำ (XAUUSD) ---
 with tab3:
     st.markdown("### 💱 วิเคราะห์ Forex & สินค้าโภคภัณฑ์ (ทองคำ XAUUSD, น้ำมัน, คริปโต)")
     
-    # เมนูปุ่มกดลัดเลือกคู่เงินยอดนิยม
     st.markdown("##### ⚡ เลือกคู่เงินยอดนิยม:")
     c_btn1, c_btn2, c_btn3, c_btn4, c_btn5, c_btn6 = st.columns(6)
     if 'selected_forex' not in st.session_state:
@@ -1418,15 +1415,9 @@ with tab3:
                     exchange_found = res_data.get('Exchange', 'Global Market')
                     raw_df_found = item.get('raw_df')
                     status_lbl = res_data.get('status_text', '')
-                    status_box_class_gallery = res_data.get('status_box_class', 'status-banner-sideways')
+                    badge_status_class = res_data.get('badge_class', 'badge-board-sideways')
                     pat_found = res_data.get('pattern_name', 'สร้างฐานสะสมกำลัง.png')
                     pat_sc_found = res_data.get('pattern_score', 75.0)
-
-                    badge_status_class = "badge-board-sideways"
-                    if "uptrend" in status_box_class_gallery: badge_status_class = "badge-board-uptrend"
-                    elif "pullback" in status_box_class_gallery: badge_status_class = "badge-board-pullback"
-                    elif "support" in status_box_class_gallery: badge_status_class = "badge-board-support"
-                    elif "downtrend" in status_box_class_gallery: badge_status_class = "badge-board-downtrend"
 
                     with cols[c_offset]:
                         with st.container():
@@ -1448,3 +1439,29 @@ with tab3:
             st.markdown("---")
             st.markdown("#### 📊 ตารางสรุปสัญญาณราคา Forex & ทองคำ")
             st.dataframe(server_state["forex_df"], use_container_width=True, hide_index=True, height=220)
+
+
+# --- TAB ใหม่ 5: ข่าวเด่นเศรษฐกิจ & ปัจจัยตลาดหุ้น (Macro Market News) ---
+with tab_news:
+    st.markdown("### 📰 ข่าวเด่นเศรษฐกิจมหภาค & ปัจจัยกระทบตลาดหุ้น (Macro News)")
+    st.caption("อัปเดตข่าวสารทิศทางดอกเบี้ย Fed, เศรษฐกิจสหรัฐฯ และความเคลื่อนไหวตลาดการเงินโลก (คลิกเพื่ออ่านข่าวต้นฉบับ)")
+    
+    if st.button("🔄 อัปเดตข่าวสารล่าสุด", key="btn_refresh_macro_news"):
+        get_macro_market_news.clear()
+        st.rerun()
+
+    with st.spinner("⏳ กำลังดึงและแปลหัวข้อข่าวเศรษฐกิจล่าสุด..."):
+        macro_news_list = get_macro_market_news()
+
+    if macro_news_list:
+        for news in macro_news_list:
+            pub_time_str = f" • เผยแพร่เมื่อ: {news['time']}" if news['time'] else ""
+            st.markdown(f"""
+            <a href="{news['link']}" target="_blank" class="news-card-link">
+                <div class="news-card-title">📌 {news['title']}</div>
+                <div style="font-size:0.75rem; color:#94A3B8; margin-bottom:3px; font-style:italic;">En: {news['title_en']}</div>
+                <div class="news-card-meta">🌐 แหล่งข่าว: Financial Market News{pub_time_str}</div>
+            </a>
+            """, unsafe_allow_html=True)
+    else:
+        st.info("ℹ️ ขณะนี้ไม่สามารถเชื่อมต่อฟีดข่าวเศรษฐกิจได้ กรุณากดปุ่มอัปเดตอีกครั้ง")
