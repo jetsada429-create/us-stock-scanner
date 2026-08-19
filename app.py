@@ -26,7 +26,7 @@ PLOTLY_CONFIG = {
 
 UI_LANG_MAP = {
     'search_ticker_title': "US Stock & Forex Scanner PRO (by.Jetsada)",
-    'search_ticker_subtitle': "ระบบสแกนเทคนิคอล • วิเคราะห์กระแสเงิน Nasdaq & S&P500 • AI Pattern • Forex & ทองคำ",
+    'search_ticker_subtitle': "ระบบสแกนเทคนิคอล • คำนวณ % โครงสร้างราคา • AI Pattern • วิเคราะห์กระแสเงินตลาด",
     'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB, AAOI, RXT, CRWV, BZAI, TSM):",
     'search_forex_label': "พิมพ์คู่เงินหรือสินทรัพย์ (เช่น XAUUSD, EURUSD, GBPUSD, USDJPY, BTCUSD, USOIL):",
     'btn_analyze_single': "🔎 วิเคราะห์ทันที",
@@ -42,7 +42,7 @@ UI_LANG_MAP = {
     'tab_search_ticker': "🔍 ค้นหา & วิเคราะห์หุ้นรายตัว",
     'tab_scan_market': "🚀 สแกนคัดหุ้นทรงสวย",
     'tab_forex': "💱 วิเคราะห์ Forex & ทองคำ (XAUUSD)",
-    'tab_macro_news': "📰 ข่าวสารเศรษฐกิจ & ปัจจัยตลาดหุ้น",
+    'tab_macro_news': "📰 ข่าวเด่นเศรษฐกิจ & ปัจจัยตลาดหุ้น",
 }
 
 SECTOR_MAP_TH = {
@@ -244,17 +244,29 @@ st.markdown(
     .flow-meter-container {
         background: #1E293B;
         border-radius: 8px;
-        height: 20px;
+        height: 22px;
         width: 100%;
         display: flex;
         overflow: hidden;
         margin: 6px 0 10px 0;
         border: 1px solid #334155;
     }
-    .flow-buy-bar { background: linear-gradient(90deg, #10B981, #059669); height: 100%; text-align: center; color: #fff; font-size: 0.7rem; font-weight: bold; line-height: 20px; }
-    .flow-sell-bar { background: linear-gradient(90deg, #E11D48, #BE123C); height: 100%; text-align: center; color: #fff; font-size: 0.7rem; font-weight: bold; line-height: 20px; }
-    .flow-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 8px; }
-    .flow-sub-card { background: #0F172A; border: 1px solid #1E293B; border-radius: 8px; padding: 10px; text-align: center; }
+    .flow-buy-bar { background: linear-gradient(90deg, #10B981, #059669); height: 100%; text-align: center; color: #fff; font-size: 0.75rem; font-weight: bold; line-height: 22px; }
+    .flow-sell-bar { background: linear-gradient(90deg, #E11D48, #BE123C); height: 100%; text-align: center; color: #fff; font-size: 0.75rem; font-weight: bold; line-height: 22px; }
+    .flow-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .flow-sub-card { background: #0F172A; border: 1px solid #1E293B; border-radius: 8px; padding: 10px 8px; text-align: center; }
+    
+    /* กล่องเตือนภัยจุดระวังโดนเทขาย */
+    .danger-alert-box {
+        background: #2A0814;
+        border: 1px solid #E11D48;
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin-top: 10px;
+        font-size: 0.78rem;
+        line-height: 1.5;
+        color: #FECDD3;
+    }
 
     /* สไตล์ข่าวสาร */
     .news-card-link {
@@ -301,7 +313,6 @@ def calculate_market_flow(index_symbol, index_name):
         if df is None or df.empty or len(df) < 25:
             return None
         
-        # คำนวณ Money Flow Multiplier (MFM) & Buy/Sell Volume
         high = df['High']
         low = df['Low']
         close = df['Close']
@@ -313,60 +324,74 @@ def calculate_market_flow(index_symbol, index_name):
         buy_vol = vol * ((1.0 + mfm) / 2.0)
         sell_vol = vol * ((1.0 - mfm) / 2.0)
         
-        # 1. ข้อมูลรายวัน (1 วันล่าสุด)
+        # 1. รายวัน (1 วันล่าสุด)
         d1_buy = float(buy_vol.iloc[-1])
         d1_sell = float(sell_vol.iloc[-1])
         d1_tot = max(1.0, d1_buy + d1_sell)
         d1_buy_pct = round((d1_buy / d1_tot) * 100, 1)
         d1_sell_pct = round(100.0 - d1_buy_pct, 1)
+        d1_winner = "ฝั่งซื้อชนะ" if d1_buy_pct >= 50 else "ฝั่งขายคุม"
         
-        # 2. ข้อมูลรายสัปดาห์ (5 วันทำการ)
+        # 2. รายสัปดาห์ (5 วันทำการ)
         w1_buy = float(buy_vol.tail(5).sum())
         w1_sell = float(sell_vol.tail(5).sum())
         w1_tot = max(1.0, w1_buy + w1_sell)
         w1_buy_pct = round((w1_buy / w1_tot) * 100, 1)
         w1_sell_pct = round(100.0 - w1_buy_pct, 1)
+        w1_winner = f"ฝั่งซื้อสะสมมากกว่า ({w1_buy_pct}%)" if w1_buy_pct >= 50 else f"ฝั่งขายสะสมมากกว่า ({w1_sell_pct}%)"
         
-        # 3. ข้อมูลรายเดือน (21 วันทำการ)
+        # 3. รายเดือน (21 วันทำการ)
         m1_buy = float(buy_vol.tail(21).sum())
         m1_sell = float(sell_vol.tail(21).sum())
         m1_tot = max(1.0, m1_buy + m1_sell)
         m1_buy_pct = round((m1_buy / m1_tot) * 100, 1)
         m1_sell_pct = round(100.0 - m1_buy_pct, 1)
+        m1_winner = f"ยอดสะสมซื้อนำ ({m1_buy_pct}%)" if m1_buy_pct >= 50 else f"ยอดสะสมขายนำ ({m1_sell_pct}%)"
         
         latest_price = round(float(close.iloc[-1]), 2)
         prev_price = float(close.iloc[-2])
         chg_pct = round(((latest_price - prev_price) / prev_price) * 100, 2)
         
-        # สรุปสภาวะตลาด
+        # คำนวณจุดระวังโดนเทขาย (Danger Breakdown Price)
+        ma20_val = round(float(close.rolling(20).mean().iloc[-1]), 2)
+        support_5d = round(float(low.tail(5).min()), 2)
+        danger_price = min(ma20_val, support_5d)
+        
+        # สรุปสภาวะตลาด & จุดระวัง
         if d1_buy_pct >= 58 and w1_buy_pct >= 54:
             market_state = "🚀 แรงซื้อครอบงำตลาด (Strong Bullish Accumulation)"
-            state_desc = "กระแสเงินไหลเข้าสะสมอย่างหนาแน่นทั้งรายวันและรายสัปดาห์ โมเมนตัมฝั่งซื้อได้เปรียบสูง"
+            state_desc = "กระแสเงินไหลเข้าสะสมต่อเนื่อง โมเมนตัมฝั่งซื้อได้เปรียบสูงในทุกกรอบเวลา"
             state_color = "#10B981"
+            danger_warning = f"⚠️ จุดระวัง: ดัชนียังแข็งแกร่ง แต่หากหลุด ${danger_price} อาจเกิดแรงขายทำกำไรระยะสั้น (Short-term Pullback)"
         elif d1_sell_pct >= 58 and w1_sell_pct >= 54:
             market_state = "📉 แรงขายเทกระจายของ (Heavy Distribution / Bearish)"
-            state_desc = "กระแสเงินไหลออกต่อเนื่อง มีแรงเทขายทำกำไรกดดันดัชนีหลัก ควรเพิ่มความระมัดระวัง"
+            state_desc = "กระแสเงินไหลออกหนาแน่น ยอดสะสมฝั่งขายคุมตลาดชัดเจน ควรเพิ่มความระมัดระวัง"
             state_color = "#F43F5E"
+            danger_warning = f"🚨 จุดเตือนภัยวิกฤต: ยอดขายสะสมหนาแน่น หากหลุดต่ำกว่า ${danger_price} จะเกิด Panic Sell ระลอกใหญ่ ห้ามรับมีดเด็ดขาด"
         elif d1_buy_pct >= 52:
             market_state = "⏳ พักฐานสะสมแรง / ลุ้นดีดตัว (Healthy Pullback Flow)"
-            state_desc = "ดัชนีมีแรงซื้อหยั่งเชิงพยุงตลาด ยอดสะสมรายสัปดาห์ทรงตัวในกรอบสะสมพลัง"
+            state_desc = "ดัชนีมีแรงซื้อหยั่งเชิงพยุงตลาด ยอดสะสมรายสัปดาห์อยู่ในกรอบสะสมพลัง"
             state_color = "#F59E0B"
+            danger_warning = f"⚠️ จุดระวัง: สังเกตแนวรับ ${danger_price} หากยืนได้มีโอกาสดีดตัวกลับตัวรอบใหม่ แต่ถ้าหลุดจะเปลี่ยนเป็นขาลง"
         else:
             market_state = "〰️ ตลาดไซด์เวย์แกว่งตัวรอทิศทาง (Neutral / Choppy)"
             state_desc = "แรงซื้อและแรงขายใกล้เคียงกัน ดัชนีแกว่งตัวในกรอบแคบเพื่อรอปัจจัยหนุนใหม่"
             state_color = "#94A3B8"
+            danger_warning = f"⚠️ จุดระวัง: กรอบราคาผันผวน ระวังโดนดัก Stop Loss รอเบรกเอาท์ชัดเจนก่อนเข้าเทรด"
             
         return {
             'symbol': index_symbol,
             'name': index_name,
             'price': latest_price,
             'chg_pct': chg_pct,
-            'd1_buy_pct': d1_buy_pct, 'd1_sell_pct': d1_sell_pct,
-            'w1_buy_pct': w1_buy_pct, 'w1_sell_pct': w1_sell_pct,
-            'm1_buy_pct': m1_buy_pct, 'm1_sell_pct': m1_sell_pct,
+            'd1_buy_pct': d1_buy_pct, 'd1_sell_pct': d1_sell_pct, 'd1_winner': d1_winner,
+            'w1_buy_pct': w1_buy_pct, 'w1_sell_pct': w1_sell_pct, 'w1_winner': w1_winner,
+            'm1_buy_pct': m1_buy_pct, 'm1_sell_pct': m1_sell_pct, 'm1_winner': m1_winner,
             'market_state': market_state,
             'state_desc': state_desc,
             'state_color': state_color,
+            'danger_price': danger_price,
+            'danger_warning': danger_warning,
             'date': df.index[-1].strftime('%d/%m/%Y')
         }
     except Exception:
@@ -669,7 +694,38 @@ def get_financials(ticker):
     except Exception: pass
     return None
 
-# ================= 8. ฟังก์ชันวิเคราะห์หลัก =================
+# ================= 8. ฟังก์ชันสร้างกราฟเทคนิค (ป้องกัน NameError 100%) =================
+def create_ta_chart(df, ticker, res_data):
+    if df is None or df.empty or res_data is None:
+        return None
+    try:
+        fig = go.Figure(data=[go.Candlestick(
+            x=df.index, open=df['open'], high=df['high'], low=df['low'], close=df['close'], name='ราคา'
+        )])
+        fast_ma = df['close'].rolling(20).mean()
+        slow_ma = df['close'].rolling(50).mean()
+        fig.add_trace(go.Scatter(x=df.index, y=fast_ma, line=dict(color='#38BDF8', width=1.2), name='MA20'))
+        fig.add_trace(go.Scatter(x=df.index, y=slow_ma, line=dict(color='#FB923C', width=1.2), name='MA50'))
+
+        for key, color, ay_pos in [('Support 1 ($)', '#22C55E', -12), ('Support 2 ($)', '#16A34A', 12), ('Support 3 ($)', '#15803D', -12)]:
+            if key in res_data and res_data[key] is not None:
+                val = res_data[key]
+                fig.add_shape(type="line", x0=df.index[0], y0=val, x1=df.index[-1], y1=val, line=dict(color=color, width=1.6, dash='dash'))
+                fig.add_annotation(x=df.index[-1], y=val, text=f"{key.replace(' ($)', '')}: {val}", bgcolor=color, font=dict(color="white", size=9), xanchor="left", ax=8, ay=ay_pos)
+
+        for key, color, ay_pos in [('Resist 1 ($)', '#EF4444', -12), ('Resist 2 ($)', '#F97316', 12), ('Resist 3 ($)', '#EAB308', -12), ('Resist 4 ($)', '#991B1B', 12)]:
+            if key in res_data and res_data[key] is not None:
+                val = res_data[key]
+                fig.add_shape(type="line", x0=df.index[0], y0=val, x1=df.index[-1], y1=val, line=dict(color=color, width=1.6, dash='dash'))
+                fig.add_annotation(x=df.index[-1], y=val, text=f"{key.replace(' ($)', '')}: {val}", bgcolor=color, font=dict(color="white", size=9), xanchor="left", ax=8, ay=ay_pos)
+
+        fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
+        fig.update_layout(xaxis_rangeslider_visible=False, template='plotly_dark', margin=dict(l=6, r=65, t=10, b=6), height=340, dragmode='pan', yaxis_title="ราคา", showlegend=False)
+        return fig
+    except Exception:
+        return None
+
+# ================= 9. ฟังก์ชันวิเคราะห์หลัก =================
 @st.cache_data(ttl=3600, show_spinner=False)
 def check_ma_snr_combo(item_input, info_mode=False):
     try:
@@ -729,7 +785,6 @@ def check_ma_snr_combo(item_input, info_mode=False):
 
         dist_s1_pct = ((latest_close - s1) / s1) * 100
 
-        # จำแนก 5 สภาวะตลาดแท้จริง พร้อมเลือกคลาส Badge คมชัดสูง
         if (not is_above_ma20 and not is_above_ma50 and latest_rsi < 45) or drop_8d_pct <= -15.0:
             trend_status = "DOWNTREND"
             status_text = "📉 ลงแรง / ขาลงชัดเจน (ห้ามรับมีด)"
@@ -825,7 +880,7 @@ def check_ma_snr_combo(item_input, info_mode=False):
         pass
     return None, None
 
-# ================= 9. ฟังก์ชันช่วยเรนเดอร์ UI รายละเอียด =================
+# ================= 10. ฟังก์ชันช่วยเรนเดอร์ UI รายละเอียด =================
 def render_analysis_view(res, raw_df, df_profit, news_items, single_ticker, is_forex=False):
     company_full_name = res.get("longNameEn", single_ticker)
     sector_desc = res.get("sectorTh", "N/A")
@@ -987,7 +1042,7 @@ def render_analysis_view(res, raw_df, df_profit, news_items, single_ticker, is_f
             if summary_text != 'N/A':
                  st.markdown(f'<div class="biz-summary">{summary_text}</div>', unsafe_allow_html=True)
 
-# ================= 10. ส่วนแสดงผล UI หน้าจอ (5 แท็บสมบูรณ์) =================
+# ================= 11. ส่วนแสดงผล UI หน้าจอ (5 แท็บสมบูรณ์) =================
 tab_market, tab1, tab2, tab3, tab_news = st.tabs([
     UI_LANG_MAP['tab_market_flow'],
     UI_LANG_MAP['tab_search_ticker'],
@@ -996,10 +1051,10 @@ tab_market, tab1, tab2, tab3, tab_news = st.tabs([
     UI_LANG_MAP['tab_macro_news']
 ])
 
-# --- TAB 1: ทิศทางตลาด Nasdaq & S&P 500 (Buy-Sell Volume Flow) แก้ไขการเรนเดอร์ให้สวยงาม ---
+# --- TAB 1: ทิศทางตลาด Nasdaq & S&P 500 (Buy-Sell Volume Flow & AI Danger Alert) ---
 with tab_market:
     st.markdown("### 🏛️ วิเคราะห์กระแสเงินและทิศทางตลาด (Nasdaq & S&P 500 Flow)")
-    st.caption("คำนวณสัดส่วนแรงซื้อ (Buy Volume) vs แรงขาย (Sell Volume) สะสมรายวัน รายสัปดาห์ และรายเดือน")
+    st.caption("คำนวณสัดส่วนแรงซื้อ (Buy Volume) vs แรงขาย (Sell Volume) สะสมรายวัน รายสัปดาห์ รายเดือน และจุดระวังเทขาย")
     
     if st.button("🔄 อัปเดตข้อมูลกระแสเงินสดตลาด", key="btn_refresh_market_flow"):
         calculate_market_flow.clear()
@@ -1016,7 +1071,6 @@ with tab_market:
     for col, m_data in zip([col_m1, col_m2], [data_qqq, data_spy]):
         if m_data:
             with col:
-                # เรนเดอร์ HTML ชิดซ้าย ป้องกันปัญหา Code Block
                 html_flow_card = f"""<div class="market-flow-card">
 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
 <span style="font-size:1.15rem; font-weight:800; color:#60A5FA;">📈 {m_data['name']}</span>
@@ -1035,19 +1089,23 @@ with tab_market:
 <div class="flow-grid-3">
 <div class="flow-sub-card">
 <div style="font-size:0.7rem; color:#94A3B8;">รายวัน (1D)</div>
-<div style="font-size:0.85rem; font-weight:800; color:{'#10B981' if m_data['d1_buy_pct']>=50 else '#F43F5E'};">{'ซื้อหนุน' if m_data['d1_buy_pct']>=50 else 'ขายกดดัน'}</div>
-<div style="font-size:0.72rem; color:#cbd5e1;">สุทธิ {m_data['d1_buy_pct']}%</div>
+<div style="font-size:0.82rem; font-weight:800; color:{'#10B981' if m_data['d1_buy_pct']>=50 else '#F43F5E'};">{m_data['d1_winner']}</div>
+<div style="font-size:0.72rem; color:#cbd5e1;">ซื้อ {m_data['d1_buy_pct']}% | ขาย {m_data['d1_sell_pct']}%</div>
 </div>
 <div class="flow-sub-card">
-<div style="font-size:0.7rem; color:#94A3B8;">รายสัปดาห์ (1W)</div>
-<div style="font-size:0.85rem; font-weight:800; color:{'#10B981' if m_data['w1_buy_pct']>=50 else '#F43F5E'};">{'ซื้อสะสม' if m_data['w1_buy_pct']>=50 else 'ขายสะสม'}</div>
-<div style="font-size:0.72rem; color:#cbd5e1;">ซื้อ {m_data['w1_buy_pct']}%</div>
+<div style="font-size:0.7rem; color:#94A3B8;">รายสัปดาห์ (1W / 5 วัน)</div>
+<div style="font-size:0.82rem; font-weight:800; color:{'#10B981' if m_data['w1_buy_pct']>=50 else '#F43F5E'};">{m_data['w1_winner']}</div>
+<div style="font-size:0.72rem; color:#cbd5e1;">ซื้อ {m_data['w1_buy_pct']}% | ขาย {m_data['w1_sell_pct']}%</div>
 </div>
 <div class="flow-sub-card">
-<div style="font-size:0.7rem; color:#94A3B8;">รายเดือน (1M)</div>
-<div style="font-size:0.85rem; font-weight:800; color:{'#10B981' if m_data['m1_buy_pct']>=50 else '#F43F5E'};">{'ขาขึ้นคุม' if m_data['m1_buy_pct']>=50 else 'ขาลงคุม'}</div>
-<div style="font-size:0.72rem; color:#cbd5e1;">ซื้อ {m_data['m1_buy_pct']}%</div>
+<div style="font-size:0.7rem; color:#94A3B8;">รายเดือน (1M / 21 วัน)</div>
+<div style="font-size:0.82rem; font-weight:800; color:{'#10B981' if m_data['m1_buy_pct']>=50 else '#F43F5E'};">{m_data['m1_winner']}</div>
+<div style="font-size:0.72rem; color:#cbd5e1;">ซื้อ {m_data['m1_buy_pct']}% | ขาย {m_data['m1_sell_pct']}%</div>
 </div>
+</div>
+<div class="danger-alert-box">
+<b>⚠️ จุดระวัง & ระดับราคาชี้เป็นชี้ตาย:</b><br>
+{m_data['danger_warning']}
 </div>
 </div>"""
                 st.markdown(html_flow_card, unsafe_allow_html=True)
@@ -1225,7 +1283,7 @@ with tab2:
                     item_idx = row_idx + c_offset
                     if item_idx < len(current_page_items):
                         item = current_page_items[item_idx]
-                        res_data = item['res_data']
+                        res_data = item.get('res_data', {})
                         ticker_found = res_data.get('Ticker', '')
                         company_name_found = res_data.get('longNameEn', ticker_found)
                         sector_found = res_data.get('sectorTh', 'N/A')
@@ -1248,7 +1306,7 @@ with tab2:
                                 if raw_df_found is not None:
                                     st.markdown(f'<div class="chart-header-badge">{ticker_found} ({exchange_found}) | ล่าสุด: ${res_data.get("Price ($)", 0)} (RSI: {res_data.get("RSI", 0)})</div>', unsafe_allow_html=True)
                                     fig_gallery = create_ta_chart(raw_df_found, ticker_found, res_data)
-                                    if fig_gallery:
+                                    if fig_gallery is not None:
                                         st.plotly_chart(fig_gallery, use_container_width=True, config=PLOTLY_CONFIG, key=f"gallery_chart_{ticker_found}_{page_num}_{item_idx}")
                                 
                                     st.markdown(f'<div class="pattern-box" style="font-size:0.72rem; padding:3px 6px;">🤖 AI Pattern: {pat_found} ({pat_sc_found}%)</div>', unsafe_allow_html=True)
@@ -1353,7 +1411,7 @@ with tab3:
                     'pattern_name', 'Support 1 ($)', 'Support 2 ($)', 'Support 3 ($)', 'RSI', 
                     'Resist 1 ($)', 'Resist 2 ($)', 'Resist 3 ($)', 'Resist 4 ($)', 'Date'
                 ]
-                available_fx_cols = [c for c in cols_to_show_fx if c in df_display_filtered.columns] if 'df_display_filtered' in locals() else [c for c in cols_to_show_fx if c in df_fx_display.columns]
+                available_fx_cols = [c for c in cols_to_show_fx if c in df_fx_display.columns]
                 server_state["forex_df"] = df_fx_display[available_fx_cols]
             st.rerun()
 
@@ -1367,7 +1425,7 @@ with tab3:
                 item_idx = row_idx + c_offset
                 if item_idx < len(fx_results):
                     item = fx_results[item_idx]
-                    res_data = item['res_data']
+                    res_data = item.get('res_data', {})
                     ticker_found = res_data.get('Ticker', '')
                     company_name_found = res_data.get('longNameEn', ticker_found)
                     sector_found = res_data.get('sectorTh', 'Forex/Commodity')
@@ -1388,7 +1446,7 @@ with tab3:
                             if raw_df_found is not None:
                                 st.markdown(f'<div class="chart-header-badge">{ticker_found} ({exchange_found}) | ล่าสุด: {res_data.get("Price ($)", 0)} (RSI: {res_data.get("RSI", 0)})</div>', unsafe_allow_html=True)
                                 fig_gallery_fx = create_ta_chart(raw_df_found, ticker_found, res_data)
-                                if fig_gallery_fx:
+                                if fig_gallery_fx is not None:
                                     st.plotly_chart(fig_gallery_fx, use_container_width=True, config=PLOTLY_CONFIG, key=f"gal_fx_{ticker_found}_{item_idx}")
                             
                                 st.markdown(f'<div class="pattern-box" style="font-size:0.72rem; padding:3px 6px;">🤖 AI Pattern: {pat_found} ({pat_sc_found}%)</div>', unsafe_allow_html=True)
