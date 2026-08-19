@@ -12,7 +12,7 @@ import plotly.graph_objects as go
 
 # ================= 1. ตั้งค่าแอปและตัวแปรหลัก =================
 st.set_page_config(
-    page_title="US Stock Scanner PRO (by.Jetsada)",
+    page_title="US Stock & Forex Scanner PRO",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -25,20 +25,22 @@ PLOTLY_CONFIG = {
 }
 
 UI_LANG_MAP = {
-    'search_ticker_title': "US Stock Scanner PRO (by.Jetsada)",
+    'search_ticker_title': "US Stock & Forex Scanner PRO (by.Jetsada)",
     'search_ticker_subtitle': "ระบบสแกนเทคนิคอล • คำนวณ % โครงสร้างราคา • AI Pattern • 3 แนวรับ 4 แนวต้าน",
     'search_ticker_label': "พิมพ์ชื่อ Ticker หุ้น (เช่น NVDA, PLTR, RKLB, AAOI, RXT, CRWV, BZAI, TSM):",
+    'search_forex_label': "พิมพ์คู่เงินหรือสินทรัพย์ (เช่น XAUUSD, EURUSD, GBPUSD, USDJPY, BTCUSD, USOIL):",
     'btn_analyze_single': "🔎 วิเคราะห์ทันที",
-    'btn_scan_market': "🚀 เริ่มสแกนตลาด",
-    'status_preparing_tickers': "⏳ กำลังเตรียมรายชื่อหุ้นชั้นนำครอบคลุมทุกกลุ่มอุตสาหกรรม...",
+    'btn_scan_market': "🚀 เริ่มสแกนตลาดหุ้น",
+    'btn_scan_forex': "🚀 สแกนตลาด Forex & ทองคำ",
+    'status_preparing_tickers': "⏳ กำลังดึงรายชื่อหุ้นผู้นำตลาด...",
     'status_scanning': "⏳ สแกนไปแล้ว {count}/{total} ตัว (พบหุ้นทรงสวย {found} ตัว)...",
     'status_analyzing_single': "⏳ กำลังดึงข้อมูลและวิเคราะห์ {ticker}...",
     'expander_business_summary': "📖 สรุปธุรกิจ & โครงสร้างผู้ถือหุ้น (แปลไทยอัตโนมัติ)",
     'chart_title_single': "📈 กราฟเทคนิค 3 แนวรับ และ 4 ระดับแนวต้าน",
     'analysis_title': "📊 ข้อมูลแนวรับ - แนวต้าน & ตัวชี้วัดสำคัญ",
-    'tab_search_ticker': "🔍 ค้นหา & วิเคราะห์รายตัว",
+    'tab_search_ticker': "🔍 ค้นหา & วิเคราะห์หุ้นรายตัว",
     'tab_scan_market': "🚀 สแกนคัดหุ้นทรงสวย",
-    'tab_watchlist': "⭐ Watchlist ส่วนตัว",
+    'tab_forex': "💱 วิเคราะห์ Forex & ทองคำ (XAUUSD)",
 }
 
 SECTOR_MAP_TH = {
@@ -61,6 +63,24 @@ SECTOR_MAP_TH = {
     'Utilities': '💡 สาธารณูปโภค / ไฟฟ้า & ประปา'
 }
 
+# รายชื่อคู่เงิน Forex และสินค้าโภคภัณฑ์ยอดนิยม
+FOREX_DIRECTORY = [
+    {'ticker': 'XAUUSD', 'name': 'Gold Spot / US Dollar (ทองคำ)', 'type': 'Commodity', 'exchange': 'Precious Metals'},
+    {'ticker': 'EURUSD', 'name': 'Euro / US Dollar', 'type': 'Major Forex', 'exchange': 'Forex Market'},
+    {'ticker': 'GBPUSD', 'name': 'British Pound / US Dollar', 'type': 'Major Forex', 'exchange': 'Forex Market'},
+    {'ticker': 'USDJPY', 'name': 'US Dollar / Japanese Yen', 'type': 'Major Forex', 'exchange': 'Forex Market'},
+    {'ticker': 'AUDUSD', 'name': 'Australian Dollar / US Dollar', 'type': 'Major Forex', 'exchange': 'Forex Market'},
+    {'ticker': 'USDCAD', 'name': 'US Dollar / Canadian Dollar', 'type': 'Major Forex', 'exchange': 'Forex Market'},
+    {'ticker': 'USDCHF', 'name': 'US Dollar / Swiss Franc', 'type': 'Major Forex', 'exchange': 'Forex Market'},
+    {'ticker': 'NZDUSD', 'name': 'New Zealand Dollar / US Dollar', 'type': 'Major Forex', 'exchange': 'Forex Market'},
+    {'ticker': 'EURJPY', 'name': 'Euro / Japanese Yen', 'type': 'Cross Forex', 'exchange': 'Forex Market'},
+    {'ticker': 'GBPJPY', 'name': 'British Pound / Japanese Yen', 'type': 'Cross Forex', 'exchange': 'Forex Market'},
+    {'ticker': 'BTCUSD', 'name': 'Bitcoin / US Dollar (บิตคอยน์)', 'type': 'Crypto', 'exchange': 'Crypto Market'},
+    {'ticker': 'ETHUSD', 'name': 'Ethereum / US Dollar (อีเธอเรียม)', 'type': 'Crypto', 'exchange': 'Crypto Market'},
+    {'ticker': 'USOIL', 'name': 'Crude Oil WTI (น้ำมันดิบ)', 'type': 'Commodity', 'exchange': 'Energy Commodity'},
+    {'ticker': 'XAGUSD', 'name': 'Silver Spot / US Dollar (โลหะเงิน)', 'type': 'Commodity', 'exchange': 'Precious Metals'}
+]
+
 # ================= 2. จัดการ Session และ Global State =================
 @st.cache_resource
 def get_yfinance_session():
@@ -81,15 +101,15 @@ def get_global_server_state():
         "latest_results": None,
         "latest_df": None,
         "last_scanned_at": None,
-        "last_scanned_dt": None
+        "last_scanned_dt": None,
+        "forex_results": None,
+        "forex_df": None,
+        "forex_scanned_at": None
     }
 
 server_state = get_global_server_state()
 
-if 'watchlist' not in st.session_state:
-    st.session_state.watchlist = []
-
-# ================= 3. Custom CSS ปรับแต่งสีพื้นหลัง 5 สีตามสถานะ =================
+# ================= 3. Custom CSS ปรับแต่งสีสันให้คมชัดโดดเด่น =================
 st.markdown(
     """
     <style>
@@ -206,23 +226,25 @@ st.markdown(
     .price-badge-group {
         display: flex;
         flex-wrap: wrap;
-        gap: 5px;
+        gap: 6px;
+        align-items: center;
     }
     .price-badge {
-        font-size: 0.72rem;
-        padding: 2px 7px;
-        border-radius: 5px;
-        font-weight: 600;
+        font-size: 0.76rem;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-weight: 700;
         white-space: nowrap;
     }
     .badge-rsi { background: #1E293B; color: #38BDF8; border: 1px solid #334155; }
     .badge-dist { background: #064E3B; color: #34D399; border: 1px solid #059669; }
     
-    .badge-status-uptrend { background: #064E3B; color: #6EE7B7; border: 1px solid #10b981; font-weight: 700; padding: 3px 8px; border-radius: 6px; font-size: 0.78rem; }
-    .badge-status-pullback { background: #451A03; color: #FCD34D; border: 1px solid #f59e0b; font-weight: 700; padding: 3px 8px; border-radius: 6px; font-size: 0.78rem; }
-    .badge-status-support { background: #1E3A8A; color: #93C5FD; border: 1px solid #38bdf8; font-weight: 700; padding: 3px 8px; border-radius: 6px; font-size: 0.78rem; }
-    .badge-status-sideways { background: #1E293B; color: #94A3B8; border: 1px solid #64748b; font-weight: 700; padding: 3px 8px; border-radius: 6px; font-size: 0.78rem; }
-    .badge-status-downtrend { background: #4C0519; color: #FDA4AF; border: 1px solid #f43f5e; font-weight: 700; padding: 3px 8px; border-radius: 6px; font-size: 0.78rem; }
+    /* ป้ายสถานะแบบมีสีสันชัดเจนใน Compact Board */
+    .badge-board-uptrend { background: #059669 !important; color: #FFFFFF !important; border: 1.5px solid #34D399 !important; font-weight: 800 !important; }
+    .badge-board-pullback { background: #D97706 !important; color: #FFFFFF !important; border: 1.5px solid #FCD34D !important; font-weight: 800 !important; }
+    .badge-board-support { background: #0284C7 !important; color: #FFFFFF !important; border: 1.5px solid #38BDF8 !important; font-weight: 800 !important; }
+    .badge-board-sideways { background: #475569 !important; color: #FFFFFF !important; border: 1.5px solid #94A3B8 !important; font-weight: 800 !important; }
+    .badge-board-downtrend { background: #E11D48 !important; color: #FFFFFF !important; border: 1.5px solid #FDA4AF !important; font-weight: 800 !important; }
 
     .badge-ai-box { background: #172554; color: #93C5FD; border: 1px solid #1E40AF; font-weight: 700; }
     .badge-market { background: #1e1b4b; color: #c7d2fe; border: 1px solid #4338ca; font-weight: 700; }
@@ -378,12 +400,29 @@ st.markdown(
 st.markdown(f'<div class="main-title">{UI_LANG_MAP["search_ticker_title"]}</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="sub-title">{UI_LANG_MAP["search_ticker_subtitle"]}</div>', unsafe_allow_html=True)
 
-# ================= 4. ระบบฐานข้อมูลหุ้นครอบคลุมทุกหมวดอุตสาหกรรม (ไม่พึ่งพา Wikipedia 100%) =================
+# ================= 4. ระบบแปลงสัญลักษณ์ Forex / สินค้าโภคภัณฑ์ =================
+def resolve_financial_symbol(ticker_str):
+    raw = str(ticker_str).strip().upper()
+    mapping = {
+        'XAUUSD': 'GC=F', 'GOLD': 'GC=F', 'XAU': 'GC=F',
+        'XAGUSD': 'SI=F', 'SILVER': 'SI=F',
+        'USOIL': 'CL=F', 'OIL': 'CL=F', 'WTI': 'CL=F',
+        'BTCUSD': 'BTC-USD', 'BTC': 'BTC-USD',
+        'ETHUSD': 'ETH-USD', 'ETH': 'ETH-USD',
+        'EURUSD': 'EURUSD=X', 'GBPUSD': 'GBPUSD=X', 'USDJPY': 'USDJPY=X',
+        'AUDUSD': 'AUDUSD=X', 'USDCAD': 'USDCAD=X', 'USDCHF': 'USDCHF=X',
+        'NZDUSD': 'NZDUSD=X', 'EURJPY': 'EURJPY=X', 'GBPJPY': 'GBPJPY=X'
+    }
+    if raw in mapping:
+        return mapping[raw], raw
+    if len(raw) == 6 and (raw.endswith('USD') or raw.startswith('USD') or raw.startswith('EUR') or raw.startswith('GBP')):
+        return f"{raw}=X", raw
+    return raw, raw
+
+# ================= 5. ระบบดึงรายชื่อหุ้นผู้นำตลาด =================
 @st.cache_data(ttl=86400)
 def get_us_stock_directory(scope="TOP500"):
-    # ฐานข้อมูลหุ้นผู้นำตลาดและหุ้นเติบโตชั้นนำกว่า 250+ ตัวครอบคลุมทุกหมวด A-Z (Tech, Finance, Health, Energy, Consumer, Industrial)
     master_directory = [
-        # --- เทคโนโลยี & AI (Tech & AI) ---
         {'ticker': 'NVDA', 'name': 'NVIDIA Corporation', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'เซมิคอนดักเตอร์ AI', 'exchange': 'NASDAQ'},
         {'ticker': 'TSM', 'name': 'Taiwan Semiconductor Manufacturing Co.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ผลิตชิปเซมิคอนดักเตอร์', 'exchange': 'NYSE'},
         {'ticker': 'AAPL', 'name': 'Apple Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'อุปกรณ์สื่อสารและคอมพิวเตอร์', 'exchange': 'NASDAQ'},
@@ -402,162 +441,34 @@ def get_us_stock_directory(scope="TOP500"):
         {'ticker': 'ADBE', 'name': 'Adobe Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ซอฟต์แวร์สร้างสรรค์ดิจิทัล', 'exchange': 'NASDAQ'},
         {'ticker': 'QCOM', 'name': 'QUALCOMM Incorporated', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ชิปสื่อสารไร้สาย 5G', 'exchange': 'NASDAQ'},
         {'ticker': 'INTC', 'name': 'Intel Corporation', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ผลิตชิปประมวลผล', 'exchange': 'NASDAQ'},
-        {'ticker': 'IBM', 'name': 'International Business Machines Corp.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ไอทีไอทีไอทีเซอร์วิสและคลาวด์', 'exchange': 'NYSE'},
-        {'ticker': 'CSCO', 'name': 'Cisco Systems, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'อุปกรณ์เครือข่ายคอมพิวเตอร์', 'exchange': 'NASDAQ'},
-        {'ticker': 'NFLX', 'name': 'Netflix, Inc.', 'sector': '📡 สื่อสาร / โทรคมนาคม & บันเทิง', 'industry': 'สตรีมมิ่งความบันเทิงระดับโลก', 'exchange': 'NASDAQ'},
-        {'ticker': 'UBER', 'name': 'Uber Technologies, Inc.', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'แพลตฟอร์มเรียกรถและขนส่ง', 'exchange': 'NYSE'},
-        {'ticker': 'CRWD', 'name': 'CrowdStrike Holdings, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ความปลอดภัยไซเบอร์คลาวด์', 'exchange': 'NASDAQ'},
-        {'ticker': 'PANW', 'name': 'Palo Alto Networks, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ความปลอดภัยเครือข่าย', 'exchange': 'NASDAQ'},
-        {'ticker': 'SNOW', 'name': 'Snowflake Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'คลาวด์ดาต้าแวร์เฮาส์', 'exchange': 'NYSE'},
-        {'ticker': 'DDOG', 'name': 'Datadog, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'มอนิเตอร์ระบบคลาวด์', 'exchange': 'NASDAQ'},
-        {'ticker': 'NET', 'name': 'Cloudflare, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ความปลอดภัยเว็บและ CDN', 'exchange': 'NYSE'},
-        {'ticker': 'ANET', 'name': 'Arista Networks, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'เครือข่ายศูนย์ข้อมูล', 'exchange': 'NYSE'},
-        {'ticker': 'AMAT', 'name': 'Applied Materials, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'อุปกรณ์ผลิตเซมิคอนดักเตอร์', 'exchange': 'NASDAQ'},
-        {'ticker': 'LRCX', 'name': 'Lam Research Corporation', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'อุปกรณ์ผลิตเวเฟอร์ชิป', 'exchange': 'NASDAQ'},
-        {'ticker': 'KLAC', 'name': 'KLA Corporation', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ตรวจสอบคุณภาพชิป', 'exchange': 'NASDAQ'},
-        {'ticker': 'MU', 'name': 'Micron Technology, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'หน่วยความจำ DRAM และ NAND', 'exchange': 'NASDAQ'},
-        {'ticker': 'TXN', 'name': 'Texas Instruments Incorporated', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'อนาล็อกเซมิคอนดักเตอร์', 'exchange': 'NASDAQ'},
-        {'ticker': 'ADI', 'name': 'Analog Devices, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'วงจรรวมประสิทธิภาพสูง', 'exchange': 'NASDAQ'},
-        {'ticker': 'NXPI', 'name': 'NXP Semiconductors N.V.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ชิปยานยนต์และไอโอที', 'exchange': 'NASDAQ'},
-        {'ticker': 'MCHP', 'name': 'Microchip Technology Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ไมโครคอนโทรลเลอร์', 'exchange': 'NASDAQ'},
-        {'ticker': 'ON', 'name': 'ON Semiconductor Corporation', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'พลังงานอัจฉริยะและเซนเซอร์', 'exchange': 'NASDAQ'},
-        {'ticker': 'MPWR', 'name': 'Monolithic Power Systems, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ระบบจัดการพลังงานชิป', 'exchange': 'NASDAQ'},
-        {'ticker': 'ALAB', 'name': 'Astera Labs, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'การเชื่อมต่อศูนย์ข้อมูล AI', 'exchange': 'NASDAQ'},
-        {'ticker': 'VRT', 'name': 'Vertiv Holdings Co.', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'ระบบระบายความร้อนศูนย์ข้อมูล AI', 'exchange': 'NYSE'},
-
-        # --- ยานยนต์, อุตสาหกรรม & อวกาศ (Autos & Industrials) ---
         {'ticker': 'TSLA', 'name': 'Tesla, Inc.', 'sector': '🛍️ สินค้าฟุ่มเฟือย / ค้าปลีก & ยานยนต์', 'industry': 'ยานยนต์ไฟฟ้าและพลังงาน', 'exchange': 'NASDAQ'},
         {'ticker': 'RKLB', 'name': 'Rocket Lab USA, Inc.', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'เทคโนโลยีปล่อยจรวดและอวกาศ', 'exchange': 'NASDAQ'},
-        {'ticker': 'GE', 'name': 'GE Aerospace', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'เครื่องยนต์อากาศยานและพลังงาน', 'exchange': 'NYSE'},
-        {'ticker': 'CAT', 'name': 'Caterpillar Inc.', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'เครื่องจักรกลหนักและเหมืองแร่', 'exchange': 'NYSE'},
-        {'ticker': 'BA', 'name': 'The Boeing Company', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'อากาศยานและการป้องกันประเทศ', 'exchange': 'NYSE'},
-        {'ticker': 'RTX', 'name': 'RTX Corporation', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'เทคโนโลยีการบินและอวกาศ', 'exchange': 'NYSE'},
-        {'ticker': 'LMT', 'name': 'Lockheed Martin Corporation', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'ยุทโธปกรณ์และอากาศยานทหาร', 'exchange': 'NYSE'},
-        {'ticker': 'DE', 'name': 'Deere & Company', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'เครื่องจักรกลการเกษตร', 'exchange': 'NYSE'},
-        {'ticker': 'HON', 'name': 'Honeywell International Inc.', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'เทคโนโลยีอุตสาหกรรมผสม', 'exchange': 'NASDAQ'},
-        {'ticker': 'UNP', 'name': 'Union Pacific Corporation', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'ขนส่งทางรถไฟราง', 'exchange': 'NYSE'},
-        {'ticker': 'UPS', 'name': 'United Parcel Service, Inc.', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'โลจิสติกส์และขนส่งพัสดุ', 'exchange': 'NYSE'},
-        {'ticker': 'FDX', 'name': 'FedEx Corporation', 'sector': '🏭 อุตสาหกรรม / อวกาศ & ขนส่ง', 'industry': 'ขนส่งและจัดส่งสินค้าระหว่างประเทศ', 'exchange': 'NYSE'},
-
-        # --- การเงิน & ธนาคาร (Financials & Fintech) ---
         {'ticker': 'JPM', 'name': 'JPMorgan Chase & Co.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'ธนาคารพาณิชย์ระดับโลก', 'exchange': 'NYSE'},
         {'ticker': 'V', 'name': 'Visa Inc.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'เครือข่ายการชำระเงินดิจิทัล', 'exchange': 'NYSE'},
-        {'ticker': 'MA', 'name': 'Mastercard Incorporated', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'บริการชำระเงินระดับโลก', 'exchange': 'NYSE'},
-        {'ticker': 'BAC', 'name': 'Bank of America Corporation', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'ธนาคารและบริการทางการเงิน', 'exchange': 'NYSE'},
-        {'ticker': 'WFC', 'name': 'Wells Fargo & Company', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'ธนาคารพาณิชย์และสินเชื่อ', 'exchange': 'NYSE'},
-        {'ticker': 'GS', 'name': 'The Goldman Sachs Group, Inc.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'วาณิชธนกิจและการลงทุน', 'exchange': 'NYSE'},
-        {'ticker': 'MS', 'name': 'Morgan Stanley', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'จัดการความมั่งคั่งและวาณิชธนกิจ', 'exchange': 'NYSE'},
-        {'ticker': 'AXP', 'name': 'American Express Company', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'บริการบัตรเครดิตและการเงิน', 'exchange': 'NYSE'},
-        {'ticker': 'BLK', 'name': 'BlackRock, Inc.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'จัดการกองทุนและสินทรัพย์', 'exchange': 'NYSE'},
-        {'ticker': 'BRK-B', 'name': 'Berkshire Hathaway Inc.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'โฮลดิ้งคอมพานีและการลงทุน', 'exchange': 'NYSE'},
-        {'ticker': 'SOFI', 'name': 'SoFi Technologies, Inc.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'ฟินเทคและการเงินดิจิทัล', 'exchange': 'NASDAQ'},
-        {'ticker': 'COIN', 'name': 'Coinbase Global, Inc.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'แพลตฟอร์มซื้อขายคริปโทเคอร์เรนซี', 'exchange': 'NASDAQ'},
-        {'ticker': 'HOOD', 'name': 'Robinhood Markets, Inc.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'แอปพลิเคชันการลงทุนและเทรด', 'exchange': 'NASDAQ'},
-
-        # --- สุขภาพ & การแพทย์ (Healthcare & Pharma) ---
         {'ticker': 'LLY', 'name': 'Eli Lilly and Company', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'เวชภัณฑ์และยารักษาโรค', 'exchange': 'NYSE'},
         {'ticker': 'UNH', 'name': 'UnitedHealth Group Incorporated', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'ประกันสุขภาพและบริการทางการแพทย์', 'exchange': 'NYSE'},
-        {'ticker': 'JNJ', 'name': 'Johnson & Johnson', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'เวชภัณฑ์และอุปกรณ์การแพทย์', 'exchange': 'NYSE'},
-        {'ticker': 'ABBV', 'name': 'AbbVie Inc.', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'ชีวเวชภัณฑ์และยารักษาโรค', 'exchange': 'NYSE'},
-        {'ticker': 'MRK', 'name': 'Merck & Co., Inc.', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'พัฒนายาและวัคซีน', 'exchange': 'NYSE'},
-        {'ticker': 'PFE', 'name': 'Pfizer Inc.', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'เวชภัณฑ์ระดับโลก', 'exchange': 'NYSE'},
-        {'ticker': 'TMO', 'name': 'Thermo Fisher Scientific Inc.', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'อุปกรณ์และเครื่องมือวิทยาศาสตร์', 'exchange': 'NYSE'},
-        {'ticker': 'ABT', 'name': 'Abbott Laboratories', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'อุปกรณ์การแพทย์และโภชนาการ', 'exchange': 'NYSE'},
-        {'ticker': 'ISRG', 'name': 'Intuitive Surgical, Inc.', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'หุ่นยนต์ผ่าตัดทางการแพทย์', 'exchange': 'NASDAQ'},
-        {'ticker': 'AMGN', 'name': 'Amgen Inc.', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'เทคโนโลยีชีวภาพขั้นสูง', 'exchange': 'NASDAQ'},
-        {'ticker': 'HIMS', 'name': 'Hims & Hers Health, Inc.', 'sector': '🏥 สุขภาพ / การแพทย์ & ยา', 'industry': 'เทเลเฮลท์และการดูแลสุขภาพ', 'exchange': 'NYSE'},
-
-        # --- พลังงาน & สินค้าโภคภัณฑ์ (Energy & Materials) ---
         {'ticker': 'XOM', 'name': 'Exxon Mobil Corporation', 'sector': '⚡ พลังงาน / น้ำมัน & ก๊าซ', 'industry': 'สำรวจและผลิตน้ำมัน & ก๊าซธรรมชาติ', 'exchange': 'NYSE'},
-        {'ticker': 'CVX', 'name': 'Chevron Corporation', 'sector': '⚡ พลังงาน / น้ำมัน & ก๊าซ', 'industry': 'พลังงานปิโตรเลียมครบวงจร', 'exchange': 'NYSE'},
-        {'ticker': 'COP', 'name': 'ConocoPhillips', 'sector': '⚡ พลังงาน / น้ำมัน & ก๊าซ', 'industry': 'สำรวจและผลิตปิโตรเลียม', 'exchange': 'NYSE'},
-        {'ticker': 'SLB', 'name': 'Schlumberger Limited', 'sector': '⚡ พลังงาน / น้ำมัน & ก๊าซ', 'industry': 'บริการขุดเจาะและเทคโนโลยีพลังงาน', 'exchange': 'NYSE'},
-        {'ticker': 'OXY', 'name': 'Occidental Petroleum Corporation', 'sector': '⚡ พลังงาน / น้ำมัน & ก๊าซ', 'industry': 'สำรวจน้ำมันและก๊าซ', 'exchange': 'NYSE'},
-        {'ticker': 'LIN', 'name': 'Linde plc', 'sector': '🧪 วัตถุดิบพื้นฐาน / เคมีภัณฑ์ & เหมืองแร่', 'industry': 'ก๊าซอุตสาหกรรมและเคมีภัณฑ์', 'exchange': 'NASDAQ'},
-        {'ticker': 'FCX', 'name': 'Freeport-McMoRan Inc.', 'sector': '🧪 วัตถุดิบพื้นฐาน / เคมีภัณฑ์ & เหมืองแร่', 'industry': 'เหมืองแร่ทองแดงและทองคำ', 'exchange': 'NYSE'},
-
-        # --- ค้าปลีก, อุปโภคบริโภค & บันเทิง (Consumer & Media) ---
         {'ticker': 'WMT', 'name': 'Walmart Inc.', 'sector': '🛒 สินค้าอุปโภคบริโภคจำเป็น', 'industry': 'ค้าปลีกและซูเปอร์เซ็นเตอร์', 'exchange': 'NYSE'},
         {'ticker': 'COST', 'name': 'Costco Wholesale Corporation', 'sector': '🛒 สินค้าอุปโภคบริโภคจำเป็น', 'industry': 'คลังสินค้าสมาชิกค้าปลีก', 'exchange': 'NASDAQ'},
-        {'ticker': 'PG', 'name': 'The Procter & Gamble Company', 'sector': '🛒 สินค้าอุปโภคบริโภคจำเป็น', 'industry': 'สินค้าอุปโภคบริโภคในครัวเรือน', 'exchange': 'NYSE'},
-        {'ticker': 'KO', 'name': 'The Coca-Cola Company', 'sector': '🛒 สินค้าอุปโภคบริโภคจำเป็น', 'industry': 'เครื่องดื่มไม่มีแอลกอฮอล์', 'exchange': 'NYSE'},
-        {'ticker': 'PEP', 'name': 'PepsiCo, Inc.', 'sector': '🛒 สินค้าอุปโภคบริโภคจำเป็น', 'industry': 'อาหารและเครื่องดื่ม', 'exchange': 'NASDAQ'},
-        {'ticker': 'MCD', 'name': 'McDonald\'s Corporation', 'sector': '🛍️ สินค้าฟุ่มเฟือย / ค้าปลีก & ยานยนต์', 'industry': 'ร้านอาหารบริการด่วนระดับโลก', 'exchange': 'NYSE'},
-        {'ticker': 'SBUX', 'name': 'Starbucks Corporation', 'sector': '🛍️ สินค้าฟุ่มเฟือย / ค้าปลีก & ยานยนต์', 'industry': 'ร้านกาแฟและเครื่องดื่ม', 'exchange': 'NASDAQ'},
-        {'ticker': 'DIS', 'name': 'The Walt Disney Company', 'sector': '📡 สื่อสาร / โทรคมนาคม & บันเทิง', 'industry': 'สื่อและความบันเทิงระดับโลก', 'exchange': 'NYSE'},
-        {'ticker': 'HD', 'name': 'The Home Depot, Inc.', 'sector': '🛍️ สินค้าฟุ่มเฟือย / ค้าปลีก & ยานยนต์', 'industry': 'ค้าปลีกวัสดุก่อสร้างและซ่อมแซม', 'exchange': 'NYSE'},
-        {'ticker': 'LOW', 'name': 'Lowe\'s Companies, Inc.', 'sector': '🛍️ สินค้าฟุ่มเฟือย / ค้าปลีก & ยานยนต์', 'industry': 'ปรับปรุงบ้านและค้าปลีก', 'exchange': 'NYSE'},
-        {'ticker': 'NKE', 'name': 'NIKE, Inc.', 'sector': '🛍️ สินค้าฟุ่มเฟือย / ค้าปลีก & ยานยนต์', 'industry': 'รองเท้าและเครื่องแต่งกายกีฬา', 'exchange': 'NYSE'},
-        {'ticker': 'BKNG', 'name': 'Booking Holdings Inc.', 'sector': '🛍️ สินค้าฟุ่มเฟือย / ค้าปลีก & ยานยนต์', 'industry': 'บริการจองการท่องเที่ยวและโรงแรม', 'exchange': 'NASDAQ'},
-        {'ticker': 'ABNB', 'name': 'Airbnb, Inc.', 'sector': '🛍️ สินค้าฟุ่มเฟือย / ค้าปลีก & ยานยนต์', 'industry': 'แพลตฟอร์มที่พักและท่องเที่ยว', 'exchange': 'NASDAQ'},
-        
-        # --- คริปโต, บล็อกเชน & หุ้นซิ่ง (Crypto & Growth) ---
         {'ticker': 'MSTR', 'name': 'MicroStrategy Incorporated', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ซอฟต์แวร์องค์กรและสินทรัพย์บิตคอยน์', 'exchange': 'NASDAQ'},
-        {'ticker': 'MARA', 'name': 'Marathon Digital Holdings, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ขุดเหมืองคริปโทเคอร์เรนซี', 'exchange': 'NASDAQ'},
-        {'ticker': 'RIOT', 'name': 'Riot Platforms, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'โครงสร้างพื้นฐานบล็อกเชน', 'exchange': 'NASDAQ'},
-        {'ticker': 'IREN', 'name': 'Iris Energy Limited', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ศูนย์ข้อมูล AI และพลังงานหมุนเวียน', 'exchange': 'NASDAQ'},
-        {'ticker': 'WULF', 'name': 'TeraWulf Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'เหมืองขุดบิตคอยน์พลังงานสะอาด', 'exchange': 'NASDAQ'},
-        {'ticker': 'CIFR', 'name': 'Cipher Mining Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ดาต้าเซ็นเตอร์และเหมืองคริปโต', 'exchange': 'NASDAQ'},
-        {'ticker': 'CLSK', 'name': 'CleanSpark, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'เหมืองขุดบิตคอยน์พลังงานสีเขียว', 'exchange': 'NASDAQ'},
-        {'ticker': 'IONQ', 'name': 'IonQ, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'คอมพิวเตอร์ควอนตัม', 'exchange': 'NYSE'},
-        {'ticker': 'RGTI', 'name': 'Rigetti Computing, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ระบบประมวลผลควอนตัม', 'exchange': 'NASDAQ'},
-        {'ticker': 'QBTS', 'name': 'D-Wave Quantum Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'เทคโนโลยีควอนตัมคูแอนลิง', 'exchange': 'NYSE'},
-        {'ticker': 'SOUN', 'name': 'SoundHound AI, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ปัญญาประดิษฐ์เสียงพูด', 'exchange': 'NASDAQ'},
-        {'ticker': 'BBAI', 'name': 'BigBear.ai Holdings, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'โซลูชันวิเคราะห์ข้อมูล AI', 'exchange': 'NYSE'},
-        {'ticker': 'AI', 'name': 'C3.ai, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'แอปพลิเคชันซอฟต์แวร์ Enterprise AI', 'exchange': 'NYSE'},
-        {'ticker': 'PATH', 'name': 'UiPath Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ระบบอัตโนมัติหุ่นยนต์ซอฟต์แวร์ (RPA)', 'exchange': 'NYSE'},
-        {'ticker': 'APP', 'name': 'AppLovin Corporation', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'ซอฟต์แวร์การเติบโตและโฆษณา', 'exchange': 'NASDAQ'},
-        {'ticker': 'ASTS', 'name': 'AST SpaceMobile, Inc.', 'sector': '📡 สื่อสาร / โทรคมนาคม & บันเทิง', 'industry': 'เครือข่ายมือถือดาวเทียมอวกาศ', 'exchange': 'NASDAQ'},
-        {'ticker': 'RDDT', 'name': 'Reddit, Inc.', 'sector': '📡 สื่อสาร / โทรคมนาคม & บันเทิง', 'industry': 'แพลตฟอร์มโซเชียลและชุมชนออนไลน์', 'exchange': 'NYSE'},
-        {'ticker': 'AFRM', 'name': 'Affirm Holdings, Inc.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'บริการซื้อก่อนจ่ายทีหลัง (BNPL)', 'exchange': 'NASDAQ'},
-        {'ticker': 'DKNG', 'name': 'DraftKings Inc.', 'sector': '📡 สื่อสาร / โทรคมนาคม & บันเทิง', 'industry': 'แพลตฟอร์มเกมและความบันเทิงดิจิทัล', 'exchange': 'NASDAQ'},
+        {'ticker': 'COIN', 'name': 'Coinbase Global, Inc.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'แพลตฟอร์มซื้อขายคริปโทเคอร์เรนซี', 'exchange': 'NASDAQ'},
+        {'ticker': 'HOOD', 'name': 'Robinhood Markets, Inc.', 'sector': '🏦 การเงิน / ธนาคาร & ประกันภัย', 'industry': 'แอปพลิเคชันการลงทุนและเทรด', 'exchange': 'NASDAQ'},
         {'ticker': 'AAOI', 'name': 'Applied Optoelectronics, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'อุปกรณ์ไฟเบอร์ออปติกและเลเซอร์', 'exchange': 'NASDAQ'},
         {'ticker': 'CRWV', 'name': 'CoreWeave, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'คลาวด์คอมพิวติ้งสำหรับ AI', 'exchange': 'NASDAQ'},
         {'ticker': 'RXT', 'name': 'Rackspace Technology, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'บริการมัลติคลาวด์และโฮสติ้ง', 'exchange': 'NASDAQ'},
         {'ticker': 'BZAI', 'name': 'Blaize Holdings, Inc.', 'sector': '💻 เทคโนโลยี / อิเล็กทรอนิกส์ & ซอฟต์แวร์', 'industry': 'โปรเซสเซอร์ Edge AI', 'exchange': 'NASDAQ'}
     ]
+    return master_directory
 
-    # เพิ่มเติมหุ้นจาก Wikipedia S&P 500 / NASDAQ 100 เพื่อความกว้างของตลาด
-    try:
-        url_sp500 = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-        tables = pd.read_html(url_sp500)
-        sp500_df = tables[0]
-        for _, row in sp500_df.iterrows():
-            sym = str(row['Symbol']).replace('.', '-').strip().upper()
-            sec_name = str(row.get('Security', sym))
-            raw_sector = str(row.get('GICS Sector', 'N/A'))
-            raw_industry = str(row.get('GICS Sub-Industry', 'N/A'))
-            ex = "NASDAQ" if "NASDAQ" in str(row.get('Exchange', '')).upper() else "NYSE"
-            sector_th = SECTOR_MAP_TH.get(raw_sector, raw_sector)
-            master_directory.append({
-                'ticker': sym, 'name': sec_name, 'sector': sector_th,
-                'industry': raw_industry, 'exchange': ex
-            })
-    except Exception:
-        pass
-
-    # กรอง Ticker ซ้ำและทำความสะอาด
-    unique_items = []
-    seen = set()
-    for item in master_directory:
-        sym = item['ticker']
-        if sym and sym not in seen and len(sym) <= 6:
-            unique_items.append(item)
-            seen.add(sym)
-
-    if scope == "TOP500": return unique_items[:500]
-    elif scope == "GROWTH1000": return unique_items[:1000]
-    return unique_items[:2500]
-
-# ================= 5. ฟังก์ชันดึงประวัติราคาความเร็วสูง =================
+# ================= 6. ฟังก์ชันดึงประวัติราคาความเร็วสูง =================
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_stock_history_dual(ticker):
-    ticker_clean = str(ticker).strip().upper()
+    resolved_ticker, display_name = resolve_financial_symbol(ticker)
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
     }
     try:
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker_clean}?range=6mo&interval=1d"
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{resolved_ticker}?range=6mo&interval=1d"
         res = requests.get(url, headers=headers, timeout=3.5)
         if res.status_code == 200:
             data = res.json()
@@ -568,7 +479,7 @@ def fetch_stock_history_dual(ticker):
                 quote = r.get('indicators', {}).get('quote', [{}])[0]
                 meta = r.get('meta', {})
                 exchange_name = meta.get('exchangeName', '')
-                short_name = meta.get('shortName', meta.get('longName', ticker_clean))
+                short_name = meta.get('shortName', meta.get('longName', display_name))
                 if timestamps and quote:
                     df = pd.DataFrame({
                         'open': quote.get('open', []),
@@ -579,23 +490,23 @@ def fetch_stock_history_dual(ticker):
                     }, index=pd.to_datetime(timestamps, unit='s'))
                     df = df.dropna(subset=['close'])
                     if len(df) >= 15:
-                        market_tag = "NASDAQ" if "NMS" in exchange_name or "NGM" in exchange_name or "NASDAQ" in exchange_name.upper() else ("NYSE" if "NYQ" in exchange_name or "NYSE" in exchange_name.upper() else ("AMEX" if "ASE" in exchange_name or "AMEX" in exchange_name.upper() else "US Market"))
+                        market_tag = "NASDAQ" if "NMS" in exchange_name or "NGM" in exchange_name or "NASDAQ" in exchange_name.upper() else ("NYSE" if "NYQ" in exchange_name or "NYSE" in exchange_name.upper() else ("AMEX" if "ASE" in exchange_name or "AMEX" in exchange_name.upper() else ("Commodity/Forex" if "CCY" in exchange_name or "CMX" in exchange_name or "=" in resolved_ticker else "Global Market")))
                         return df, market_tag, short_name
     except Exception:
         pass
 
     try:
-        stock = yf.Ticker(ticker_clean)
+        stock = yf.Ticker(resolved_ticker)
         df = stock.history(period='6mo', interval='1d')
         if df is not None and not df.empty and len(df) >= 15:
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
             df.columns = [str(c).lower() for c in df.columns]
-            return df, "US Market", ticker_clean
+            return df, "Global Market", display_name
     except Exception:
         pass
 
-    return None, "US Market", ticker_clean
+    return None, "Global Market", display_name
 
 
 def calculate_swing_snr(df, latest_close):
@@ -638,7 +549,9 @@ def calculate_swing_snr(df, latest_close):
     elif len(valid_resists) == 1: r1 = valid_resists[0]; r2 = r1 + (r4 - r1) * 0.35; r3 = r1 + (r4 - r1) * 0.70
     else: r1 = latest_close * 1.06; r2 = latest_close * 1.15; r3 = latest_close * 1.25
 
-    return round(s1, 2), round(s2, 2), round(s3, 2), round(r1, 2), round(r2, 2), round(r3, 2), round(r4, 2)
+    # จัดการทศนิยมให้เหมาะสมกับค่าเงิน (Forex 4 ตำแหน่ง, หุ้น/ทองคำ 2 ตำแหน่ง)
+    decimals = 4 if latest_close < 2.0 else 2
+    return round(s1, decimals), round(s2, decimals), round(s3, decimals), round(r1, decimals), round(r2, decimals), round(r3, decimals), round(r4, decimals)
 
 
 def calculate_ai_pattern_match(df):
@@ -696,9 +609,10 @@ def translate_text_to_thai(text):
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_company_info_and_holders(ticker):
+    resolved_ticker, display_name = resolve_financial_symbol(ticker)
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
-        url = f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{ticker}?modules=assetProfile,defaultKeyStatistics"
+        url = f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{resolved_ticker}?modules=assetProfile,defaultKeyStatistics"
         r = requests.get(url, headers=headers, timeout=3.0)
         if r.status_code == 200:
             res_json = r.json().get('quoteSummary', {}).get('result', [{}])[0]
@@ -718,7 +632,7 @@ def get_company_info_and_holders(ticker):
             retail_held_pct = f"{max(0.0, 100 - (inst_held + insider_held)*100):.2f}%" if inst_held or insider_held else "N/A"
 
             return {
-                'longNameEn': profile.get('longName', ticker),
+                'longNameEn': profile.get('longName', display_name),
                 'sectorTh': sector_th,
                 'industryTh': industry_th,
                 'summaryTh': th_summary,
@@ -731,7 +645,7 @@ def get_company_info_and_holders(ticker):
         pass
     
     try:
-        stock = yf.Ticker(ticker, session=get_yfinance_session())
+        stock = yf.Ticker(resolved_ticker, session=get_yfinance_session())
         info = stock.info
         if info and len(info) > 5:
             raw_summary = info.get('longBusinessSummary', '')
@@ -747,7 +661,7 @@ def get_company_info_and_holders(ticker):
             retail_held_pct = f"{max(0.0, 100 - (inst_held + insider_held)*100):.2f}%" if inst_held or insider_held else "N/A"
 
             return {
-                'longNameEn': info.get('longName', ticker),
+                'longNameEn': info.get('longName', display_name),
                 'sectorTh': sector_th,
                 'industryTh': industry_th,
                 'summaryTh': th_summary,
@@ -759,14 +673,15 @@ def get_company_info_and_holders(ticker):
     except Exception:
         pass
 
-    return {'longNameEn': ticker, 'sectorTh': 'N/A', 'industryTh': 'N/A', 'summaryTh': 'N/A', 'sharesOutstanding': 'N/A', 'institutionalHeld': 'N/A', 'insiderHeld': 'N/A', 'retailHeld': 'N/A'}
+    return {'longNameEn': display_name, 'sectorTh': 'N/A', 'industryTh': 'N/A', 'summaryTh': 'N/A', 'sharesOutstanding': 'N/A', 'institutionalHeld': 'N/A', 'insiderHeld': 'N/A', 'retailHeld': 'N/A'}
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_stock_news(ticker):
+    resolved_ticker, _ = resolve_financial_symbol(ticker)
     results = []
     try:
-        rss_url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}&region=US&lang=en-US"
+        rss_url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={resolved_ticker}&region=US&lang=en-US"
         res = requests.get(rss_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3.0)
         if res.status_code == 200:
             root = ET.fromstring(res.content)
@@ -784,8 +699,9 @@ def get_stock_news(ticker):
 
 @st.cache_data(ttl=14400, show_spinner=False)
 def get_financials(ticker):
+    resolved_ticker, _ = resolve_financial_symbol(ticker)
     try:
-        stock = yf.Ticker(ticker, session=get_yfinance_session())
+        stock = yf.Ticker(resolved_ticker, session=get_yfinance_session())
         q_financials = stock.quarterly_financials
         if q_financials is not None and 'Net Income' in q_financials.index:
             net_income = q_financials.loc['Net Income'].head(3)
@@ -800,23 +716,6 @@ def get_financials(ticker):
                 return pd.DataFrame(data)
     except Exception:
         pass
-    
-    try:
-        url = f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{ticker}?modules=incomeStatementHistoryQuarterly"
-        r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3.0)
-        if r.status_code == 200:
-            stmts = r.json().get('quoteSummary', {}).get('result', [{}])[0].get('incomeStatementHistoryQuarterly', {}).get('incomeStatementHistory', [])
-            data = []
-            for s in stmts[:3]:
-                d = s.get('endDate', {}).get('fmt', '')
-                ni = s.get('netIncome', {}).get('raw', 0)
-                if d:
-                    data.append({'Quarter End': d, 'Net Income (M$)': round(ni / 1_000_000, 2)})
-            if data:
-                return pd.DataFrame(data)
-    except Exception:
-        pass
-        
     return None
 
 
@@ -834,41 +733,41 @@ def create_ta_chart(df, ticker, res_data):
         if key in res_data:
             val = res_data[key]
             fig.add_shape(type="line", x0=df.index[0], y0=val, x1=df.index[-1], y1=val, line=dict(color=color, width=1.6, dash='dash'))
-            fig.add_annotation(x=df.index[-1], y=val, text=f"{key.replace(' ($)', '')}: ${val}", bgcolor=color, font=dict(color="white", size=9), xanchor="left", ax=8, ay=ay_pos)
+            fig.add_annotation(x=df.index[-1], y=val, text=f"{key.replace(' ($)', '')}: {val}", bgcolor=color, font=dict(color="white", size=9), xanchor="left", ax=8, ay=ay_pos)
 
     for key, color, ay_pos in [('Resist 1 ($)', '#EF4444', -12), ('Resist 2 ($)', '#F97316', 12), ('Resist 3 ($)', '#EAB308', -12), ('Resist 4 ($)', '#991B1B', 12)]:
         if key in res_data:
             val = res_data[key]
             fig.add_shape(type="line", x0=df.index[0], y0=val, x1=df.index[-1], y1=val, line=dict(color=color, width=1.6, dash='dash'))
-            fig.add_annotation(x=df.index[-1], y=val, text=f"{key.replace(' ($)', '')}: ${val}", bgcolor=color, font=dict(color="white", size=9), xanchor="left", ax=8, ay=ay_pos)
+            fig.add_annotation(x=df.index[-1], y=val, text=f"{key.replace(' ($)', '')}: {val}", bgcolor=color, font=dict(color="white", size=9), xanchor="left", ax=8, ay=ay_pos)
 
     fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
-    fig.update_layout(xaxis_rangeslider_visible=False, template='plotly_dark', margin=dict(l=6, r=65, t=10, b=6), height=340, dragmode='pan', yaxis_title="ราคา ($)", showlegend=False)
+    fig.update_layout(xaxis_rangeslider_visible=False, template='plotly_dark', margin=dict(l=6, r=65, t=10, b=6), height=340, dragmode='pan', yaxis_title="ราคา", showlegend=False)
     return fig
 
 
-# ================= 6. ฟังก์ชันวิเคราะห์หลัก (มีระบบ Cache 1 ชม. ป้องกันคอขวด) =================
+# ================= 7. ฟังก์ชันวิเคราะห์หลัก (ใช้ร่วมกันทั้งหุ้นและ Forex) =================
 @st.cache_data(ttl=3600, show_spinner=False)
 def check_ma_snr_combo(item_input, info_mode=False):
     try:
         if isinstance(item_input, dict):
             ticker = item_input.get('ticker', '')
             hint_name = item_input.get('name', ticker)
-            hint_sector = item_input.get('sector', 'US Market')
-            hint_industry = item_input.get('industry', 'ธุรกิจทั่วไป')
-            hint_exchange = item_input.get('exchange', 'US Market')
+            hint_sector = item_input.get('sector', item_input.get('type', 'Global Market'))
+            hint_industry = item_input.get('industry', 'สินทรัพย์การเงิน')
+            hint_exchange = item_input.get('exchange', 'Global Market')
         else:
             ticker = str(item_input).strip().upper()
             hint_name = ticker
-            hint_sector = 'US Market'
-            hint_industry = 'ธุรกิจทั่วไป'
-            hint_exchange = 'US Market'
+            hint_sector = 'Global Market'
+            hint_industry = 'สินทรัพย์การเงิน'
+            hint_exchange = 'Global Market'
 
         df, detected_exchange, meta_name = fetch_stock_history_dual(ticker)
         if df is None or df.empty or len(df) < 15:
             return None, None
 
-        final_exchange = detected_exchange if detected_exchange != "US Market" else hint_exchange
+        final_exchange = detected_exchange if detected_exchange != "Global Market" else hint_exchange
         final_company_name = hint_name if hint_name != ticker else (meta_name if meta_name else ticker)
 
         latest_close = float(df['close'].iloc[-1])
@@ -912,23 +811,23 @@ def check_ma_snr_combo(item_input, info_mode=False):
             trend_status = "DOWNTREND"
             status_text = "📉 ลงแรง / ขาลงชัดเจน (ห้ามรับมีด)"
             status_box_class = "status-banner-downtrend"
-            badge_class = "badge-trend-bear"
-            badge_label = f"📉 ลงแรง/ขาลง: {100.0 - bullish_pct:.1f}%"
-            status_desc = f"⚠️ หุ้นหลุดเส้นค่าเฉลี่ยหลัก (ย่อตัวจากยอด 8 วัน {drop_8d_pct:.2f}%) โครงสร้างเสียเปรียบ ยังไม่ควรรับมีด"
+            badge_class = "badge-board-downtrend"
+            badge_label = f"📉 ขาลงชัดเจน: {100.0 - bullish_pct:.1f}%"
+            status_desc = f"⚠️ ราคาหลุดเส้นค่าเฉลี่ยหลัก (ย่อตัวจากยอด 8 วัน {drop_8d_pct:.2f}%) โครงสร้างเสียเปรียบ ยังไม่ควรเข้าซื้อ"
 
         elif (is_above_ma50 or is_ma_bull or bounce_8d_pct >= 8.0) and (drop_8d_pct <= -3.0 or not is_today_green) and latest_rsi >= 40:
             trend_status = "PULLBACK"
             status_text = "⏳ ย่อพักฐาน (Healthy Pullback)"
             status_box_class = "status-banner-pullback"
-            badge_class = "badge-trend-pull"
+            badge_class = "badge-board-pullback"
             badge_label = f"⏳ ย่อพักฐาน: {bullish_pct}%"
-            status_desc = f"🔄 หุ้นอยู่ในแนวโน้มใหญ่ขาขึ้น แต่แท่งเทียนกำลังย่อตัวพักฐานตามรอบ (ย่อจากยอด 8 วัน {drop_8d_pct:.2f}%) เพื่อสะสมแรง"
+            status_desc = f"🔄 อยู่ในแนวโน้มใหญ่ขาขึ้น แต่กำลังย่อตัวพักฐานตามรอบ (ย่อจากยอด 8 วัน {drop_8d_pct:.2f}%) เพื่อสะสมแรง"
 
         elif dist_s1_pct <= 4.5 and bounce_8d_pct <= 5.5 and latest_close >= s1 * 0.98:
             trend_status = "BUY_SUPPORT"
             status_text = f"🎯 ช้อนแนวรับ (เด้งจากฐาน +{bounce_8d_pct:.2f}%)"
             status_box_class = "status-banner-support"
-            badge_class = "badge-trend-support"
+            badge_class = "badge-board-support"
             badge_label = f"🎯 ช้อนแนวรับ: {bullish_pct}%"
             status_desc = f"🛡️ ราคาอยู่ในโซนแนวรับสำคัญและเริ่มมีแรงดีดกลับตัว (+{bounce_8d_pct:.2f}%) เหมาะสะสมไม้ 1"
 
@@ -936,7 +835,7 @@ def check_ma_snr_combo(item_input, info_mode=False):
             trend_status = "UPTREND"
             status_text = "🚀 ขาขึ้นแข็งแกร่ง (Strong Uptrend)"
             status_box_class = "status-banner-uptrend"
-            badge_class = "badge-trend-bull"
+            badge_class = "badge-board-uptrend"
             badge_label = f"🚀 ขาขึ้นแข็งแกร่ง: {bullish_pct}%"
             status_desc = f"✨ ราคายืนเหนือเส้นแนวโน้มหลักทุกเส้น โมเมนตัมขาขึ้นสมบูรณ์ (ดีดตัวจากฐานล่าสุด +{bounce_8d_pct:.2f}%)"
 
@@ -944,7 +843,7 @@ def check_ma_snr_combo(item_input, info_mode=False):
             trend_status = "SIDEWAYS"
             status_text = "〰️ สะสมแรง / ไซด์เวย์"
             status_box_class = "status-banner-sideways"
-            badge_class = "badge-trend-side"
+            badge_class = "badge-board-sideways"
             badge_label = f"〰️ สะสมแรง/ไซด์เวย์: {bullish_pct}%"
             status_desc = f"📦 ราคาแกว่งตัวสร้างฐานในกรอบแคบ ยังไม่มีทิศทางชัดเจน รอการเบรกเอาท์"
 
@@ -958,7 +857,7 @@ def check_ma_snr_combo(item_input, info_mode=False):
             'sectorTh': hint_sector,
             'industryTh': hint_industry,
             'Exchange': final_exchange,
-            'Price ($)': round(latest_close, 2),
+            'Price ($)': latest_close,
             'Support 1 ($)': s1,
             'Support 2 ($)': s2,
             'Support 3 ($)': s3,
@@ -983,7 +882,6 @@ def check_ma_snr_combo(item_input, info_mode=False):
             'bounce_8d_pct': f'+{bounce_8d_pct:.2f}%'
         }
 
-        # ดึงข้อมูลรายละเอียดบริษัทและผู้ถือครองเสมอเพื่อให้ไม่เป็น N/A
         co_info = get_company_info_and_holders(ticker)
         if co_info:
             if co_info.get('longNameEn') and co_info['longNameEn'] != ticker:
@@ -1005,17 +903,192 @@ def check_ma_snr_combo(item_input, info_mode=False):
     return None, None
 
 
-# ================= 7. ส่วนแสดงผล UI หน้าจอ =================
-tab1, tab2, tab3 = st.tabs([UI_LANG_MAP['tab_search_ticker'], UI_LANG_MAP['tab_scan_market'], UI_LANG_MAP['tab_watchlist']])
+# ================= 8. ฟังก์ชันช่วยเรนเดอร์ UI รายละเอียดวิเคราะห์ (นำมาใช้ซ้ำได้) =================
+def render_analysis_view(res, raw_df, df_profit, news_items, single_ticker, is_forex=False):
+    company_full_name = res.get("longNameEn", single_ticker)
+    sector_desc = res.get("sectorTh", "N/A")
+    industry_desc = res.get("industryTh", "N/A")
+    exchange_desc = res.get("Exchange", "Global Market")
 
-# --- TAB 1: ค้นหาหุ้นรายตัว ---
+    st.markdown(f'<p class="company-header">{single_ticker} : {company_full_name} <span class="price-badge badge-market">🏛️ {exchange_desc}</span></p>', unsafe_allow_html=True)
+    st.markdown(f'<div class="sector-badge">🏷️ ประเภท: {sector_desc} | กลุ่ม: {industry_desc}</div>', unsafe_allow_html=True)
+    
+    box_css = res.get('status_box_class', 'status-banner-sideways')
+    st.markdown(f"""
+    <div class="status-banner {box_css}">
+        <div class="status-title-text">{res.get('status_text', '')}</div>
+        <div class="status-desc-text">{res.get('status_desc', '')} | ข้อมูล ณ วันที่: {res.get('Date', '')} (⚡ โหลดความเร็วสูง)</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if raw_df is not None:
+        st.markdown(f"#### {UI_LANG_MAP['chart_title_single']}")
+        st.markdown(f'<div class="chart-header-badge">{single_ticker} ({exchange_desc}) | ล่าสุด: {res.get("Price ($)", 0)} (RSI: {res.get("RSI", 0)})</div>', unsafe_allow_html=True)
+        fig = create_ta_chart(raw_df, single_ticker, res)
+        if fig:
+            st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG, key=f"chart_{single_ticker}_{is_forex}")
+
+    st.markdown("---")
+    
+    st.markdown(f"#### {UI_LANG_MAP['analysis_title']}")
+    badge_class = res.get('badge_class', 'badge-board-sideways')
+    badge_label = res.get('badge_label', '〰️ สะสมแรง')
+    pat_name = res.get('pattern_name', 'สร้างฐานสะสมกำลัง.png')
+    pat_score = res.get('pattern_score', 75.0)
+
+    # แสดงผล Compact Board พร้อมป้ายสถานะสีสันชัดเจน
+    st.markdown(f"""
+    <div class="compact-board">
+        <div class="price-banner">
+            <div class="price-val-box">
+                <span style="font-size:0.8rem; color:#94A3B8; font-weight:600;">💰 ราคา:</span>
+                <span class="price-main">{res.get('Price ($)', 0)}</span>
+            </div>
+            <div class="price-badge-group">
+                <span class="price-badge badge-market">🏛️ {exchange_desc}</span>
+                <span class="price-badge {badge_class}">{badge_label}</span>
+                <span class="price-badge badge-ai-box">🤖 AI Pattern: {pat_name} ({pat_score}%)</span>
+                <span class="price-badge badge-rsi">RSI: {res.get('RSI', 0)}</span>
+                <span class="price-badge badge-dist">ห่างรับ 1: {res.get('Dist_Sup (%)', '0%')}</span>
+            </div>
+        </div>
+        <div class="snr-grid">
+            <div class="snr-card" style="border-left: 3px solid #22C55E;">
+                <div class="snr-card-title c-green">🛡️ แนวรับ (Support)</div>
+                <div class="snr-row"><span class="snr-lbl">รับ 1 (สวิงใกล้สุด)</span><span class="snr-num c-green">{res.get('Support 1 ($)', 0)}</span></div>
+                <div class="snr-row"><span class="snr-lbl">รับ 2 (ฐานหลัก)</span><span class="snr-num c-lightgreen">{res.get('Support 2 ($)', 0)}</span></div>
+                <div class="snr-row"><span class="snr-lbl">รับ 3 (โครงสร้างใหญ่)</span><span class="snr-num c-lightgreen">{res.get('Support 3 ($)', 0)}</span></div>
+            </div>
+            <div class="snr-card" style="border-left: 3px solid #EF4444;">
+                <div class="snr-card-title c-red">⚡ แนวต้าน (Resistance)</div>
+                <div class="snr-row"><span class="snr-lbl">ต้าน 1</span><span class="snr-num c-red">{res.get('Resist 1 ($)', 0)}</span></div>
+                <div class="snr-row"><span class="snr-lbl">ต้าน 2</span><span class="snr-num c-orange">{res.get('Resist 2 ($)', 0)}</span></div>
+                <div class="snr-row"><span class="snr-lbl">ต้าน 3</span><span class="snr-num c-yellow">{res.get('Resist 3 ($)', 0)}</span></div>
+                <div class="snr-row"><span class="snr-lbl">ต้าน 4 (สูงสุด)</span><span class="snr-num c-darkred">{res.get('Resist 4 ($)', 0)}</span></div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("#### 🎯 กลยุทธ์แบ่งไม้เข้าซื้อ & ประเมินความแข็งแรงของแนวรับ")
+    curr_p = res.get('Price ($)', 1.0)
+    dist_s1 = ((res.get('Support 1 ($)', 0) - curr_p) / curr_p) * 100
+    dist_s2 = ((res.get('Support 2 ($)', 0) - curr_p) / curr_p) * 100
+    dist_s3 = ((res.get('Support 3 ($)', 0) - curr_p) / curr_p) * 100
+
+    st.markdown(f"""
+    <div class="strategy-card" style="border-left: 4px solid #22C55E;">
+        <div class="strat-header">
+            <div>
+                <span class="strat-title">🛡️ แนวรับ 1 (สวิงโลว์ใกล้สุด)</span>
+                <span style="font-size:0.75rem; color:#94A3B8; margin-left:6px;">({dist_s1:+.2f}%)</span>
+            </div>
+            <span class="strat-price" style="color:#22C55E;">{res.get('Support 1 ($)', 0)}</span>
+        </div>
+        <div class="strat-body">
+            <div><span class="strat-sub">ความแข็งแรง:</span> <span class="strat-val">⭐⭐ ปานกลาง</span></div>
+            <div><span class="strat-sub">กลยุทธ์:</span> <span class="strat-val c-green">25% (ไม้หยั่งเชิง / ดูแรงเด้ง)</span></div>
+        </div>
+    </div>
+
+    <div class="strategy-card" style="border-left: 4px solid #16A34A;">
+        <div class="strat-header">
+            <div>
+                <span class="strat-title">🛡️ แนวรับ 2 (ฐานสะสมหลัก)</span>
+                <span style="font-size:0.75rem; color:#94A3B8; margin-left:6px;">({dist_s2:+.2f}%)</span>
+            </div>
+            <span class="strat-price" style="color:#4ADE80;">{res.get('Support 2 ($)', 0)}</span>
+        </div>
+        <div class="strat-body">
+            <div><span class="strat-sub">ความแข็งแรง:</span> <span class="strat-val">⭐⭐⭐⭐ แข็งแกร่ง</span></div>
+            <div><span class="strat-sub">กลยุทธ์:</span> <span class="strat-val c-lightgreen">35% (ไม้หลักสะสมของ)</span></div>
+        </div>
+    </div>
+
+    <div class="strategy-card" style="border-left: 4px solid #15803D;">
+        <div class="strat-header">
+            <div>
+                <span class="strat-title">🛡️ แนวรับ 3 (ฐานโครงสร้างใหญ่)</span>
+                <span style="font-size:0.75rem; color:#94A3B8; margin-left:6px;">({dist_s3:+.2f}%)</span>
+            </div>
+            <span class="strat-price" style="color:#86EFAC;">{res.get('Support 3 ($)', 0)}</span>
+        </div>
+        <div class="strat-body">
+            <div><span class="strat-sub">ความแข็งแรง:</span> <span class="strat-val">⭐⭐⭐⭐⭐ แข็งแกร่งมาก</span></div>
+            <div><span class="strat-sub">กลยุทธ์:</span> <span class="strat-val" style="color:#86EFAC;">40% (ไม้สะสมลึก / กลับตัวใหญ่)</span></div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if not is_forex:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("#### 📰 ข่าวสารล่าสุด & ปัจจัยกระทบ (แปลไทยอัตโนมัติ)")
+        if news_items:
+            for news in news_items:
+                pub_time = f" | เผยแพร่เมื่อ: {news['time']}" if news['time'] else ""
+                st.markdown(f"""
+                <div class="news-card">
+                    <a class="news-title" href="{news['link']}" target="_blank">📌 {news['title']}</a>
+                    <div class="news-meta">แหล่งข่าว: {news['publisher']}{pub_time}</div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info(f"ℹ️ ไม่พบหัวข้อข่าวสำคัญล่าสุดสำหรับหุ้น {single_ticker}")
+
+        st.markdown("#### 💰 กำไรสุทธิ 3 ไตรมาสล่าสุด")
+        if df_profit is not None:
+            c_table, c_chart = st.columns(2)
+            with c_table:
+                st.dataframe(df_profit, use_container_width=True, hide_index=True, height=125)
+            with c_chart:
+                bar_colors = ['#22C55E' if v >= 0 else '#EF4444' for v in df_profit['Net Income (M$)']]
+                fig_profit = go.Figure(data=[go.Bar(
+                    x=df_profit['Quarter End'], y=df_profit['Net Income (M$)'], marker_color=bar_colors
+                )])
+                fig_profit.update_layout(margin=dict(l=8, r=8, t=8, b=8), height=125, template='plotly_dark', xaxis_title="", yaxis_title="M$")
+                st.plotly_chart(fig_profit, use_container_width=True, config={'displayModeBar': False}, key=f"chart_profit_{single_ticker}")
+        else:
+            st.info("ℹ️ ไม่พบข้อมูลงบกำไรสุทธิย้อนหลังสำหรับสัญลักษณ์นี้")
+
+        st.markdown("---")
+        
+        summary_text = res.get('summaryTh', 'N/A')
+        shares_tot = res.get('sharesOutstanding', 'N/A')
+        inst_pct = res.get('institutionalHeld', 'N/A')
+        insider_pct = res.get('insiderHeld', 'N/A')
+        retail_pct = res.get('retailHeld', 'N/A')
+
+        with st.expander(UI_LANG_MAP.get('expander_business_summary', "📖 สรุปธุรกิจ & โครงสร้างผู้ถือหุ้น (แปลไทยอัตโนมัติ)"), expanded=True):
+            st.markdown(f"""
+            <div class="fin-card">
+                <b style="color: #60A5FA; font-size: 0.88rem;">📊 โครงสร้างผู้ถือหุ้น & ข้อมูลบริษัท:</b>
+                <div style="color: #F8FAFC; line-height: 1.7; margin-top: 4px; font-size: 0.82rem;">
+                • ตลาดซื้อขาย: <b style="color: #38BDF8;">{exchange_desc}</b><br>
+                • กลุ่มธุรกิจ: <b style="color: #FCD34D;">{sector_desc}</b><br>
+                • อุตสาหกรรมย่อย: <b style="color: #E2E8F0;">{industry_desc}</b><br>
+                • จำนวนหุ้นทั้งหมด: <b style="color: #FFFFFF;">{shares_tot} หุ้น</b><br>
+                • สถาบันถือครอง: <b style="color: #38BDF8;">{inst_pct}</b><br>
+                • ผู้บริหาร/Insider ถือครอง: <b style="color: #FBBF24;">{insider_pct}</b><br>
+                • รายย่อยและอื่นๆ ถือครอง: <b style="color: #34D399;">{retail_pct}</b>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            if summary_text != 'N/A':
+                 st.markdown(f'<div class="biz-summary">{summary_text}</div>', unsafe_allow_html=True)
+
+
+# ================= 9. หน้าจอหลัก (3 แท็บ) =================
+tab1, tab2, tab3 = st.tabs([UI_LANG_MAP['tab_search_ticker'], UI_LANG_MAP['tab_scan_market'], UI_LANG_MAP['tab_forex']])
+
+# --- TAB 1: ค้นหา & วิเคราะห์หุ้นรายตัว ---
 with tab1:
     col_in1, col_in2 = st.columns([3, 1])
     with col_in1:
-        single_ticker = st.text_input(UI_LANG_MAP['search_ticker_label'], value='TSM').strip().upper()
+        single_ticker = st.text_input(UI_LANG_MAP['search_ticker_label'], value='NVDA').strip().upper()
     with col_in2:
         st.markdown("<div class='desktop-only-space'></div>", unsafe_allow_html=True)
-        search_btn = st.button(UI_LANG_MAP['btn_analyze_single'])
+        search_btn = st.button(UI_LANG_MAP['btn_analyze_single'], key="btn_search_stock")
 
     if search_btn and single_ticker:
         with st.spinner(UI_LANG_MAP['status_analyzing_single'].format(ticker=single_ticker)):
@@ -1029,194 +1102,12 @@ with tab1:
                 news_items = f_news.result()
 
             if res:
-                company_full_name = res.get("longNameEn", single_ticker)
-                sector_desc = res.get("sectorTh", "N/A")
-                industry_desc = res.get("industryTh", "N/A")
-                exchange_desc = res.get("Exchange", "US Market")
-
-                st.markdown(f'<p class="company-header">{single_ticker} : {company_full_name} <span class="price-badge badge-market">🏛️ {exchange_desc}</span></p>', unsafe_allow_html=True)
-                st.markdown(f'<div class="sector-badge">🏷️ กลุ่มธุรกิจ: {sector_desc} | ย่อย: {industry_desc}</div>', unsafe_allow_html=True)
-                
-                box_css = res.get('status_box_class', 'status-banner-sideways')
-                st.markdown(f"""
-                <div class="status-banner {box_css}">
-                    <div class="status-title-text">{res.get('status_text', '')}</div>
-                    <div class="status-desc-text">{res.get('status_desc', '')} | ข้อมูล ณ วันที่: {res.get('Date', '')} (⚡ โหลดจากแคชเซิร์ฟเวอร์ 1 ชม.)</div>
-                </div>
-                """, unsafe_allow_html=True)
-
-                if single_ticker not in st.session_state.watchlist:
-                    if st.button(f"⭐ เพิ่ม {single_ticker} เข้า Watchlist", key=f"btn_add_wl_{single_ticker}"):
-                        st.session_state.watchlist.append(single_ticker)
-                        st.success(f"เพิ่ม {single_ticker} สำเร็จ!")
-                        st.rerun()
-                else:
-                    if st.button(f"🗑️ ลบ {single_ticker} ออกจาก Watchlist", key=f"btn_del_wl_{single_ticker}"):
-                        st.session_state.watchlist.remove(single_ticker)
-                        st.rerun()
-                    st.info(f"📌 หุ้น {single_ticker} อยู่ใน Watchlist แล้ว")
-
-                if raw_df is not None:
-                    st.markdown(f"#### {UI_LANG_MAP['chart_title_single']}")
-                    st.markdown(f'<div class="chart-header-badge">{single_ticker} ({exchange_desc}) | ล่าสุด: ${res.get("Price ($)", 0)} (RSI: {res.get("RSI", 0)})</div>', unsafe_allow_html=True)
-                    fig = create_ta_chart(raw_df, single_ticker, res)
-                    if fig:
-                        st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG, key=f"chart_single_{single_ticker}")
-
-                st.markdown("---")
-                
-                st.markdown(f"#### {UI_LANG_MAP['analysis_title']}")
-                badge_class = res.get('badge_class', 'badge-trend-side')
-                badge_label = res.get('badge_label', '〰️ สะสมแรง')
-                pat_name = res.get('pattern_name', 'สร้างฐานสะสมกำลัง.png')
-                pat_score = res.get('pattern_score', 75.0)
-
-                st.markdown(f"""
-                <div class="compact-board">
-                    <div class="price-banner">
-                        <div class="price-val-box">
-                            <span style="font-size:0.8rem; color:#94A3B8; font-weight:600;">💰 ราคา:</span>
-                            <span class="price-main">${res.get('Price ($)', 0)}</span>
-                        </div>
-                        <div class="price-badge-group">
-                            <span class="price-badge badge-market">🏛️ {exchange_desc}</span>
-                            <span class="price-badge {badge_class}">{badge_label}</span>
-                            <span class="price-badge badge-ai-box">🤖 AI Pattern: {pat_name} ({pat_score}%)</span>
-                            <span class="price-badge badge-rsi">RSI: {res.get('RSI', 0)}</span>
-                            <span class="price-badge badge-dist">ห่างรับ 1: {res.get('Dist_Sup (%)', '0%')}</span>
-                        </div>
-                    </div>
-                    <div class="snr-grid">
-                        <div class="snr-card" style="border-left: 3px solid #22C55E;">
-                            <div class="snr-card-title c-green">🛡️ แนวรับ (Support)</div>
-                            <div class="snr-row"><span class="snr-lbl">รับ 1 (สวิงใกล้สุด)</span><span class="snr-num c-green">${res.get('Support 1 ($)', 0)}</span></div>
-                            <div class="snr-row"><span class="snr-lbl">รับ 2 (ฐานหลัก)</span><span class="snr-num c-lightgreen">${res.get('Support 2 ($)', 0)}</span></div>
-                            <div class="snr-row"><span class="snr-lbl">รับ 3 (โครงสร้างใหญ่)</span><span class="snr-num c-lightgreen">${res.get('Support 3 ($)', 0)}</span></div>
-                        </div>
-                        <div class="snr-card" style="border-left: 3px solid #EF4444;">
-                            <div class="snr-card-title c-red">⚡ แนวต้าน (Resistance)</div>
-                            <div class="snr-row"><span class="snr-lbl">ต้าน 1</span><span class="snr-num c-red">${res.get('Resist 1 ($)', 0)}</span></div>
-                            <div class="snr-row"><span class="snr-lbl">ต้าน 2</span><span class="snr-num c-orange">${res.get('Resist 2 ($)', 0)}</span></div>
-                            <div class="snr-row"><span class="snr-lbl">ต้าน 3</span><span class="snr-num c-yellow">${res.get('Resist 3 ($)', 0)}</span></div>
-                            <div class="snr-row"><span class="snr-lbl">ต้าน 4 (สูงสุด)</span><span class="snr-num c-darkred">${res.get('Resist 4 ($)', 0)}</span></div>
-                        </div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-                st.markdown("#### 🎯 กลยุทธ์แบ่งไม้เข้าซื้อ & ประเมินความแข็งแรงของแนวรับ")
-                curr_p = res.get('Price ($)', 1.0)
-                dist_s1 = ((res.get('Support 1 ($)', 0) - curr_p) / curr_p) * 100
-                dist_s2 = ((res.get('Support 2 ($)', 0) - curr_p) / curr_p) * 100
-                dist_s3 = ((res.get('Support 3 ($)', 0) - curr_p) / curr_p) * 100
-
-                st.markdown(f"""
-                <div class="strategy-card" style="border-left: 4px solid #22C55E;">
-                    <div class="strat-header">
-                        <div>
-                            <span class="strat-title">🛡️ แนวรับ 1 (สวิงโลว์ใกล้สุด)</span>
-                            <span style="font-size:0.75rem; color:#94A3B8; margin-left:6px;">({dist_s1:+.2f}%)</span>
-                        </div>
-                        <span class="strat-price" style="color:#22C55E;">${res.get('Support 1 ($)', 0)}</span>
-                    </div>
-                    <div class="strat-body">
-                        <div><span class="strat-sub">ความแข็งแรง:</span> <span class="strat-val">⭐⭐ ปานกลาง</span></div>
-                        <div><span class="strat-sub">กลยุทธ์:</span> <span class="strat-val c-green">25% (ไม้หยั่งเชิง / ดูแรงเด้ง)</span></div>
-                    </div>
-                </div>
-
-                <div class="strategy-card" style="border-left: 4px solid #16A34A;">
-                    <div class="strat-header">
-                        <div>
-                            <span class="strat-title">🛡️ แนวรับ 2 (ฐานสะสมหลัก)</span>
-                            <span style="font-size:0.75rem; color:#94A3B8; margin-left:6px;">({dist_s2:+.2f}%)</span>
-                        </div>
-                        <span class="strat-price" style="color:#4ADE80;">${res.get('Support 2 ($)', 0)}</span>
-                    </div>
-                    <div class="strat-body">
-                        <div><span class="strat-sub">ความแข็งแรง:</span> <span class="strat-val">⭐⭐⭐⭐ แข็งแกร่ง</span></div>
-                        <div><span class="strat-sub">กลยุทธ์:</span> <span class="strat-val c-lightgreen">35% (ไม้หลักสะสมของ)</span></div>
-                    </div>
-                </div>
-
-                <div class="strategy-card" style="border-left: 4px solid #15803D;">
-                    <div class="strat-header">
-                        <div>
-                            <span class="strat-title">🛡️ แนวรับ 3 (ฐานโครงสร้างใหญ่)</span>
-                            <span style="font-size:0.75rem; color:#94A3B8; margin-left:6px;">({dist_s3:+.2f}%)</span>
-                        </div>
-                        <span class="strat-price" style="color:#86EFAC;">${res.get('Support 3 ($)', 0)}</span>
-                    </div>
-                    <div class="strat-body">
-                        <div><span class="strat-sub">ความแข็งแรง:</span> <span class="strat-val">⭐⭐⭐⭐⭐ แข็งแกร่งมาก</span></div>
-                        <div><span class="strat-sub">กลยุทธ์:</span> <span class="strat-val" style="color:#86EFAC;">40% (ไม้สะสมลึก / กลับตัวใหญ่)</span></div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-                st.markdown("<br>", unsafe_allow_html=True)
-                st.markdown("#### 📰 ข่าวสารล่าสุด & ปัจจัยกระทบ (แปลไทยอัตโนมัติ)")
-                if news_items:
-                    for news in news_items:
-                        pub_time = f" | เผยแพร่เมื่อ: {news['time']}" if news['time'] else ""
-                        st.markdown(f"""
-                        <div class="news-card">
-                            <a class="news-title" href="{news['link']}" target="_blank">📌 {news['title']}</a>
-                            <div class="news-meta">แหล่งข่าว: {news['publisher']}{pub_time}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                else:
-                    st.info(f"ℹ️ ไม่พบหัวข้อข่าวสำคัญล่าสุดสำหรับหุ้น {single_ticker}")
-
-                st.markdown("#### 💰 กำไรสุทธิ 3 ไตรมาสล่าสุด")
-                if df_profit is not None:
-                    c_table, c_chart = st.columns(2)
-                    with c_table:
-                        st.dataframe(df_profit, use_container_width=True, hide_index=True, height=125)
-                    with c_chart:
-                        bar_colors = ['#22C55E' if v >= 0 else '#EF4444' for v in df_profit['Net Income (M$)']]
-                        fig_profit = go.Figure(data=[go.Bar(
-                            x=df_profit['Quarter End'], y=df_profit['Net Income (M$)'], marker_color=bar_colors
-                        )])
-                        fig_profit.update_layout(margin=dict(l=8, r=8, t=8, b=8), height=125, template='plotly_dark', xaxis_title="", yaxis_title="M$")
-                        st.plotly_chart(fig_profit, use_container_width=True, config={'displayModeBar': False}, key=f"chart_profit_{single_ticker}")
-                else:
-                    st.warning("ไม่พบข้อมูลกำไรสุทธิย้อนหลัง")
-
-                st.markdown("---")
-                
-                summary_text = res.get('summaryTh', 'N/A')
-                shares_tot = res.get('sharesOutstanding', 'N/A')
-                inst_pct = res.get('institutionalHeld', 'N/A')
-                insider_pct = res.get('insiderHeld', 'N/A')
-                retail_pct = res.get('retailHeld', 'N/A')
-                expander_title = UI_LANG_MAP.get('expander_business_summary', "📖 สรุปธุรกิจ & โครงสร้างผู้ถือหุ้น (แปลไทยอัตโนมัติ)")
-
-                with st.expander(expander_title, expanded=True):
-                    st.markdown(f"""
-                    <div class="fin-card">
-                        <b style="color: #60A5FA; font-size: 0.88rem;">📊 โครงสร้างผู้ถือหุ้น & ข้อมูลบริษัท:</b>
-                        <div style="color: #F8FAFC; line-height: 1.7; margin-top: 4px; font-size: 0.82rem;">
-                        • ตลาดซื้อขาย: <b style="color: #38BDF8;">{exchange_desc}</b><br>
-                        • กลุ่มธุรกิจ: <b style="color: #FCD34D;">{sector_desc}</b><br>
-                        • อุตสาหกรรมย่อย: <b style="color: #E2E8F0;">{industry_desc}</b><br>
-                        • จำนวนหุ้นทั้งหมด: <b style="color: #FFFFFF;">{shares_tot} หุ้น</b><br>
-                        • สถาบันถือครอง: <b style="color: #38BDF8;">{inst_pct}</b><br>
-                        • ผู้บริหาร/Insider ถือครอง: <b style="color: #FBBF24;">{insider_pct}</b><br>
-                        • รายย่อยและอื่นๆ ถือครอง: <b style="color: #34D399;">{retail_pct}</b>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                    if summary_text != 'N/A':
-                         st.markdown(f'<div class="biz-summary"><b>[ลักษณะการทำธุรกิจ]</b><br>{summary_text}</div>', unsafe_allow_html=True)
-                    else:
-                         st.warning("⚠️ ไม่พบข้อมูลสรุปธุรกิจสำหรับหุ้นตัวนี้")
+                render_analysis_view(res, raw_df, df_profit, news_items, single_ticker, is_forex=False)
             else:
                 st.error(f"❌ ไม่พบข้อมูลสัญลักษณ์หุ้น **{single_ticker}** ในระบบ กรุณาตรวจสอบชื่อ Ticker อีกครั้ง")
 
 
-# --- TAB 2: สแกนคัดหุ้นทั้งตลาด ---
+# --- TAB 2: สแกนคัดหุ้นทรงสวย (ทั้งตลาด) ---
 with tab2:
     st.markdown("### 🚀 สแกนหาหุ้นทรงสวยประจำวัน (NASDAQ, NYSE, AMEX)")
     
@@ -1258,7 +1149,6 @@ with tab2:
         st.rerun()
 
     if scan_btn and not is_busy:
-        # บังคับล้างแคชเพื่อให้สแกนสดใหม่ทุกครั้งที่กดปุ่ม
         check_ma_snr_combo.clear()
         
         server_state["is_scanning"] = True
@@ -1380,27 +1270,22 @@ with tab2:
                         pat_found = res_data.get('pattern_name', 'สร้างฐานสะสมกำลัง.png')
                         pat_sc_found = res_data.get('pattern_score', 75.0)
 
-                        badge_status_class = "badge-status-sideways"
-                        if "uptrend" in status_box_class_gallery: badge_status_class = "badge-status-uptrend"
-                        elif "pullback" in status_box_class_gallery: badge_status_class = "badge-status-pullback"
-                        elif "support" in status_box_class_gallery: badge_status_class = "badge-status-support"
-                        elif "downtrend" in status_box_class_gallery: badge_status_class = "badge-status-downtrend"
+                        badge_status_class = "badge-board-sideways"
+                        if "uptrend" in status_box_class_gallery: badge_status_class = "badge-board-uptrend"
+                        elif "pullback" in status_box_class_gallery: badge_status_class = "badge-board-pullback"
+                        elif "support" in status_box_class_gallery: badge_status_class = "badge-board-support"
+                        elif "downtrend" in status_box_class_gallery: badge_status_class = "badge-board-downtrend"
 
                         with cols[c_offset]:
                             with st.container():
                                 st.markdown(f'<p style="font-size:0.95rem; font-weight:bold; color:#60A5FA; margin-bottom:2px;">🟢 {ticker_found} : {company_name_found} <span class="price-badge badge-market">🏛️ {exchange_found}</span></p>', unsafe_allow_html=True)
                                 st.markdown(f'<div class="sector-badge" style="font-size:0.72rem; padding:2px 6px; margin-bottom:4px;">🏷️ {sector_found} | ย่อย: {industry_found}</div>', unsafe_allow_html=True)
                                 
-                                st.markdown(f'<div style="margin-bottom:6px;"><span class="{badge_status_class}">{status_lbl}</span></div>', unsafe_allow_html=True)
-                                st.caption(f"Support 1: ${res_data.get('Support 1 ($)', 0)} | ต้าน 1: ${res_data.get('Resist 1 ($)', 0)} | RSI: {res_data.get('RSI', 0)}")
-                                
-                                if ticker_found not in st.session_state.watchlist:
-                                    if st.button(f"⭐ บันทึก {ticker_found} เข้า Watchlist", key=f"btn_gal_wl_{ticker_found}_{page_num}_{item_idx}"):
-                                        st.session_state.watchlist.append(ticker_found)
-                                        st.rerun()
+                                st.markdown(f'<div style="margin-bottom:6px;"><span class="price-badge {badge_status_class}">{status_lbl}</span></div>', unsafe_allow_html=True)
+                                st.caption(f"Support 1: {res_data.get('Support 1 ($)', 0)} | ต้าน 1: {res_data.get('Resist 1 ($)', 0)} | RSI: {res_data.get('RSI', 0)}")
                                 
                                 if raw_df_found is not None:
-                                    st.markdown(f'<div class="chart-header-badge">{ticker_found} ({exchange_found}) | ล่าสุด: ${res_data.get("Price ($)", 0)} (RSI: {res_data.get("RSI", 0)})</div>', unsafe_allow_html=True)
+                                    st.markdown(f'<div class="chart-header-badge">{ticker_found} ({exchange_found}) | ล่าสุด: {res_data.get("Price ($)", 0)} (RSI: {res_data.get("RSI", 0)})</div>', unsafe_allow_html=True)
                                     fig_gallery = create_ta_chart(raw_df_found, ticker_found, res_data)
                                     if fig_gallery:
                                         st.plotly_chart(fig_gallery, use_container_width=True, config=PLOTLY_CONFIG, key=f"gallery_chart_{ticker_found}_{page_num}_{item_idx}")
@@ -1440,33 +1325,126 @@ with tab2:
             )
 
 
-# --- TAB 3: Watchlist ส่วนตัว ---
+# --- TAB 3: วิเคราะห์ Forex & ทองคำ (XAUUSD) ---
 with tab3:
-    st.markdown("### ⭐ รายชื่อหุ้นใน Watchlist ส่วนตัวของคุณ")
-    if st.session_state.watchlist:
-        if st.button("🗑️ ล้างรายชื่อ Watchlist ทั้งหมด", key="btn_clear_wl_all"):
-            st.session_state.watchlist = []
+    st.markdown("### 💱 วิเคราะห์ Forex & สินค้าโภคภัณฑ์ (ทองคำ XAUUSD, น้ำมัน, คริปโต)")
+    
+    # เมนูปุ่มกดลัดเลือกคู่เงินยอดนิยม
+    st.markdown("##### ⚡ เลือกคู่เงินยอดนิยม:")
+    c_btn1, c_btn2, c_btn3, c_btn4, c_btn5, c_btn6 = st.columns(6)
+    if 'selected_forex' not in st.session_state:
+        st.session_state.selected_forex = 'XAUUSD'
+
+    if c_btn1.button("🥇 XAUUSD (ทองคำ)"): st.session_state.selected_forex = 'XAUUSD'
+    if c_btn2.button("🇪🇺 EURUSD"): st.session_state.selected_forex = 'EURUSD'
+    if c_btn3.button("🇬🇧 GBPUSD"): st.session_state.selected_forex = 'GBPUSD'
+    if c_btn4.button("🇯🇵 USDJPY"): st.session_state.selected_forex = 'USDJPY'
+    if c_btn5.button("₿ BTCUSD"): st.session_state.selected_forex = 'BTCUSD'
+    if c_btn6.button("🛢️ USOIL (น้ำมัน)"): st.session_state.selected_forex = 'USOIL'
+
+    col_fx1, col_fx2 = st.columns([3, 1])
+    with col_fx1:
+        forex_pair = st.text_input(UI_LANG_MAP['search_forex_label'], value=st.session_state.selected_forex).strip().upper()
+    with col_fx2:
+        st.markdown("<div class='desktop-only-space'></div>", unsafe_allow_html=True)
+        forex_search_btn = st.button("🔎 วิเคราะห์คู่เงินทันที", key="btn_search_forex")
+
+    if (forex_search_btn or st.session_state.get('auto_run_fx', False)) and forex_pair:
+        with st.spinner(f"⏳ กำลังวิเคราะห์สัญญาณเทคนิคอล {forex_pair}..."):
+            res_fx, raw_df_fx = check_ma_snr_combo(forex_pair, info_mode=True)
+            if res_fx:
+                render_analysis_view(res_fx, raw_df_fx, None, [], forex_pair, is_forex=True)
+            else:
+                st.error(f"❌ ไม่สามารถดึงข้อมูลสัญลักษณ์ **{forex_pair}** ได้ กรุณาตรวจสอบชื่อคู่เงินอีกครั้ง")
+
+    st.markdown("---")
+    st.markdown("#### 🚀 สแกนภาพรวมตลาด Forex, ทองคำ & คริปโต ทั้งหมด")
+    
+    col_scan_fx1, col_scan_fx2 = st.columns([3, 1])
+    with col_scan_fx1:
+        btn_run_forex_scan = st.button("🚀 เริ่มสแกนตลาด Forex & สินทรัพย์หลักทั้งหมด", key="btn_run_forex_all")
+    with col_scan_fx2:
+        btn_reset_fx = st.button("🔄 รีเซ็ตข้อมูล Forex", key="btn_reset_fx")
+
+    if btn_reset_fx:
+        server_state["forex_results"] = None
+        server_state["forex_df"] = None
+        server_state["forex_scanned_at"] = None
+        st.success("รีเซ็ตผลการสแกน Forex เรียบร้อยแล้ว")
+        st.rerun()
+
+    if btn_run_forex_scan:
+        check_ma_snr_combo.clear()
+        with st.spinner("⏳ กำลังสแกนคู่เงินหลัก, ทองคำ XAUUSD และสินทรัพย์การเงินทั้งหมด..."):
+            fx_results = []
+            with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
+                futures = {executor.submit(check_ma_snr_combo, item, True): item for item in FOREX_DIRECTORY}
+                for future in concurrent.futures.as_completed(futures):
+                    try:
+                        res_fx_found, raw_df_fx_found = future.result()
+                        if res_fx_found and raw_df_fx_found is not None:
+                            fx_results.append({'res_data': res_fx_found, 'raw_df': raw_df_fx_found})
+                    except Exception:
+                        pass
+
+            server_state["forex_results"] = fx_results
+            server_state["forex_scanned_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            if fx_results:
+                all_fx_data = [item['res_data'] for item in fx_results]
+                df_fx_display = pd.DataFrame(all_fx_data)
+                cols_to_show_fx = [
+                    'Ticker', 'longNameEn', 'Exchange', 'Price ($)', 'status_text', 
+                    'pattern_name', 'Support 1 ($)', 'Support 2 ($)', 'Support 3 ($)', 'RSI', 
+                    'Resist 1 ($)', 'Resist 2 ($)', 'Resist 3 ($)', 'Resist 4 ($)', 'Date'
+                ]
+                available_fx_cols = [c for c in cols_to_show_fx if c in df_fx_display.columns]
+                server_state["forex_df"] = df_fx_display[available_fx_cols]
             st.rerun()
+
+    if server_state["forex_results"]:
+        fx_results = server_state["forex_results"]
+        st.info(f"🕒 สแกนล่าสุดเมื่อ: **{server_state.get('forex_scanned_at', '')}** | พบสินทรัพย์ทั้งหมด **{len(fx_results)}** รายการ")
         
-        st.write(f"หุ้นที่คุณติดตามอยู่ทั้งหมด: {', '.join(st.session_state.watchlist)}")
-        st.markdown("---")
-        
-        for w_ticker in st.session_state.watchlist:
-            try:
-                df_w, ex_w, name_w = fetch_stock_history_dual(w_ticker)
-                if df_w is not None and not df_w.empty:
-                    curr_price = round(float(df_w['close'].iloc[-1]), 2)
-                    prev_close = float(df_w['close'].iloc[-2]) if len(df_w) > 1 else curr_price
-                    change = round(((curr_price - prev_close) / prev_close) * 100, 2)
-                    
-                    st.markdown(f"""
-                    <div class="fin-card">
-                        <b>📌 {w_ticker} : {name_w}</b> <span class="price-badge badge-market">🏛️ {ex_w}</span> | ราคาล่าสุด: <b>${curr_price}</b> ({change:+.2f}%)
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.warning(f"📌 **{w_ticker}** | ไม่สามารถดึงข้อมูลราคาได้ในขณะนี้")
-            except Exception:
-                st.warning(f"📌 **{w_ticker}** | เกิดข้อผิดพลาดในการเชื่อมต่อข้อมูล")
-    else:
-        st.info("ยังไม่มีหุ้นใน Watchlist ส่วนตัว ลองค้นหาหุ้นรายตัวแล้วกดปุ่มเพิ่มได้เลยครับ!")
+        for row_idx in range(0, len(fx_results), 2):
+            cols = st.columns(2)
+            for c_offset in range(2):
+                item_idx = row_idx + c_offset
+                if item_idx < len(fx_results):
+                    item = fx_results[item_idx]
+                    res_data = item['res_data']
+                    ticker_found = res_data.get('Ticker', '')
+                    company_name_found = res_data.get('longNameEn', ticker_found)
+                    sector_found = res_data.get('sectorTh', 'Forex/Commodity')
+                    exchange_found = res_data.get('Exchange', 'Global Market')
+                    raw_df_found = item.get('raw_df')
+                    status_lbl = res_data.get('status_text', '')
+                    status_box_class_gallery = res_data.get('status_box_class', 'status-banner-sideways')
+                    pat_found = res_data.get('pattern_name', 'สร้างฐานสะสมกำลัง.png')
+                    pat_sc_found = res_data.get('pattern_score', 75.0)
+
+                    badge_status_class = "badge-board-sideways"
+                    if "uptrend" in status_box_class_gallery: badge_status_class = "badge-board-uptrend"
+                    elif "pullback" in status_box_class_gallery: badge_status_class = "badge-board-pullback"
+                    elif "support" in status_box_class_gallery: badge_status_class = "badge-board-support"
+                    elif "downtrend" in status_box_class_gallery: badge_status_class = "badge-board-downtrend"
+
+                    with cols[c_offset]:
+                        with st.container():
+                            st.markdown(f'<p style="font-size:0.95rem; font-weight:bold; color:#60A5FA; margin-bottom:2px;">🟢 {ticker_found} : {company_name_found} <span class="price-badge badge-market">🏛️ {exchange_found}</span></p>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="sector-badge" style="font-size:0.72rem; padding:2px 6px; margin-bottom:4px;">🏷️ {sector_found}</div>', unsafe_allow_html=True)
+                            st.markdown(f'<div style="margin-bottom:6px;"><span class="price-badge {badge_status_class}">{status_lbl}</span></div>', unsafe_allow_html=True)
+                            st.caption(f"Support 1: {res_data.get('Support 1 ($)', 0)} | ต้าน 1: {res_data.get('Resist 1 ($)', 0)} | RSI: {res_data.get('RSI', 0)}")
+                            
+                            if raw_df_found is not None:
+                                st.markdown(f'<div class="chart-header-badge">{ticker_found} ({exchange_found}) | ล่าสุด: {res_data.get("Price ($)", 0)} (RSI: {res_data.get("RSI", 0)})</div>', unsafe_allow_html=True)
+                                fig_gallery_fx = create_ta_chart(raw_df_found, ticker_found, res_data)
+                                if fig_gallery_fx:
+                                    st.plotly_chart(fig_gallery_fx, use_container_width=True, config=PLOTLY_CONFIG, key=f"gal_fx_{ticker_found}_{item_idx}")
+                            
+                                st.markdown(f'<div class="pattern-box" style="font-size:0.72rem; padding:3px 6px;">🤖 AI Pattern: {pat_found} ({pat_sc_found}%)</div>', unsafe_allow_html=True)
+                            st.markdown("<br>", unsafe_allow_html=True)
+
+        if server_state.get("forex_df") is not None:
+            st.markdown("---")
+            st.markdown("#### 📊 ตารางสรุปสัญญาณราคา Forex & ทองคำ")
+            st.dataframe(server_state["forex_df"], use_container_width=True, hide_index=True, height=220)
