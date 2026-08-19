@@ -83,7 +83,7 @@ FOREX_DIRECTORY = [
     {'ticker': 'XAGUSD', 'name': 'Silver Spot / US Dollar (โลหะเงิน)', 'type': 'Commodity', 'exchange': 'Precious Metals'}
 ]
 
-# ================= 2. ฟังก์ชันตัวช่วยระดับบนสุด (Top-Level Helpers ป้องกัน NameError 100%) =================
+# ================= 2. ฟังก์ชันตัวช่วยทั้งหมด (วางไว้ด้านบนสุด ป้องกัน NameError 100%) =================
 def get_time_elapsed_thai(last_dt):
     if not last_dt:
         return ""
@@ -130,6 +130,108 @@ def resolve_financial_symbol(ticker_str):
     if len(raw) == 6 and (raw.endswith('USD') or raw.startswith('USD') or raw.startswith('EUR') or raw.startswith('GBP')):
         return f"{raw}=X", raw
     return raw, raw
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_company_info_and_holders(ticker):
+    resolved_ticker, display_name = resolve_financial_symbol(ticker)
+    try:
+        stock = yf.Ticker(resolved_ticker, session=get_yfinance_session())
+        info = stock.info
+        if info and len(info) > 5 and info.get('longBusinessSummary'):
+            raw_summary = info.get('longBusinessSummary', '')
+            raw_sector = info.get('sector', 'N/A')
+            raw_industry = info.get('industry', 'N/A')
+            shares_out = info.get('sharesOutstanding', 0)
+            inst_held = info.get('heldPercentInstitutions', 0)
+            insider_held = info.get('heldPercentInsiders', 0)
+
+            th_summary = translate_text_to_thai(raw_summary) if raw_summary else 'N/A'
+            sector_th = SECTOR_MAP_TH.get(raw_sector, raw_sector)
+            industry_th = translate_text_to_thai(raw_industry) if raw_industry != 'N/A' else 'N/A'
+            retail_held_pct = f"{max(0.0, 100 - (inst_held + insider_held)*100):.2f}%" if inst_held or insider_held else "N/A"
+
+            return {
+                'longNameEn': info.get('longName', display_name),
+                'sectorTh': sector_th, 'industryTh': industry_th, 'summaryTh': th_summary,
+                'sharesOutstanding': f"{shares_out:,.0f}" if shares_out else "N/A",
+                'institutionalHeld': f"{inst_held*100:.2f}%" if inst_held else "N/A",
+                'insiderHeld': f"{insider_held*100:.2f}%" if insider_held else "N/A",
+                'retailHeld': retail_held_pct
+            }
+    except Exception:
+        pass
+
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        url = f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{resolved_ticker}?modules=assetProfile,defaultKeyStatistics"
+        r = requests.get(url, headers=headers, timeout=3.0)
+        if r.status_code == 200:
+            res_json = r.json().get('quoteSummary', {}).get('result', [{}])[0]
+            profile = res_json.get('assetProfile', {})
+            stats = res_json.get('defaultKeyStatistics', {})
+            raw_summary = profile.get('longBusinessSummary', '')
+            raw_sector = profile.get('sector', 'N/A')
+            raw_industry = profile.get('industry', 'N/A')
+            shares_out = stats.get('sharesOutstanding', {}).get('raw', 0)
+            inst_held = stats.get('heldPercentInstitutions', {}).get('raw', 0)
+            insider_held = stats.get('heldPercentInsiders', {}).get('raw', 0)
+
+            th_summary = translate_text_to_thai(raw_summary) if raw_summary else 'N/A'
+            sector_th = SECTOR_MAP_TH.get(raw_sector, raw_sector)
+            industry_th = translate_text_to_thai(raw_industry) if raw_industry != 'N/A' else 'N/A'
+            retail_held_pct = f"{max(0.0, 100 - (inst_held + insider_held)*100):.2f}%" if inst_held or insider_held else "N/A"
+
+            return {
+                'longNameEn': profile.get('longName', display_name),
+                'sectorTh': sector_th, 'industryTh': industry_th, 'summaryTh': th_summary,
+                'sharesOutstanding': f"{shares_out:,.0f}" if shares_out else "N/A",
+                'institutionalHeld': f"{inst_held*100:.2f}%" if inst_held else "N/A",
+                'insiderHeld': f"{insider_held*100:.2f}%" if insider_held else "N/A",
+                'retailHeld': retail_held_pct
+            }
+    except Exception:
+        pass
+
+    return {'longNameEn': display_name, 'sectorTh': 'N/A', 'industryTh': 'N/A', 'summaryTh': 'N/A', 'sharesOutstanding': 'N/A', 'institutionalHeld': 'N/A', 'insiderHeld': 'N/A', 'retailHeld': 'N/A'}
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_stock_news(ticker):
+    resolved_ticker, _ = resolve_financial_symbol(ticker)
+    results = []
+    try:
+        rss_url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={resolved_ticker}&region=US&lang=en-US"
+        res = requests.get(rss_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3.0)
+        if res.status_code == 200:
+            root = ET.fromstring(res.content)
+            for item in root.findall('./channel/item')[:3]:
+                t_node, l_node, p_node = item.find('title'), item.find('link'), item.find('pubDate')
+                raw_title = t_node.text if t_node is not None else ""
+                raw_link = l_node.text if l_node is not None else "#"
+                raw_pub = p_node.text[:16] if p_node is not None else ""
+                if raw_title:
+                    title_th = translate_text_to_thai(raw_title)
+                    results.append({'title': title_th if title_th else raw_title, 'publisher': 'Yahoo Feed', 'link': raw_link, 'time': raw_pub})
+    except Exception: pass
+    return results
+
+@st.cache_data(ttl=14400, show_spinner=False)
+def get_financials(ticker):
+    resolved_ticker, _ = resolve_financial_symbol(ticker)
+    try:
+        stock = yf.Ticker(resolved_ticker, session=get_yfinance_session())
+        q_financials = stock.quarterly_financials
+        if q_financials is not None and 'Net Income' in q_financials.index:
+            net_income = q_financials.loc['Net Income'].head(3)
+            data = []
+            for date, value in net_income.items():
+                if pd.notna(value):
+                    data.append({
+                        'Quarter End': date.strftime('%Y-%m-%d'),
+                        'Net Income (M$)': round(value / 1_000_000, 2)
+                    })
+            if data: return pd.DataFrame(data)
+    except Exception: pass
+    return None
 
 def create_ta_chart(df, ticker, res_data):
     if df is None or df.empty or res_data is None:
@@ -520,6 +622,51 @@ def calculate_market_flow_advanced(index_symbol, index_name):
         return m_data, df
     except Exception:
         return None, None
+
+def create_market_flow_dual_chart(df, index_name):
+    if df is None or df.empty:
+        return None
+    try:
+        fig = make_subplots(
+            rows=2, cols=1, shared_xaxes=True,
+            vertical_spacing=0.08,
+            row_heights=[0.68, 0.32],
+            subplot_titles=[f"📈 กราฟราคา ETF {index_name} (หน่วย: USD $)", "🌊 กราฟเส้นเม็ดเงินสะสมสถาบัน (หน่วย: ล้านดอลลาร์ $M)"]
+        )
+
+        fig.add_trace(go.Candlestick(
+            x=df.index, open=df['Open'], high=df['High'],
+            low=df['Low'], close=df['Close'], name='ราคา'
+        ), row=1, col=1)
+
+        ma20 = df['Close'].rolling(20).mean()
+        ma50 = df['Close'].rolling(50).mean()
+        fig.add_trace(go.Scatter(x=df.index, y=ma20, line=dict(color='#38BDF8', width=1.3), name='MA20'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=ma50, line=dict(color='#FB923C', width=1.3), name='MA50'), row=1, col=1)
+
+        fig.add_trace(go.Scatter(
+            x=df.index, y=df['cum_money_flow'],
+            mode='lines',
+            line=dict(color='#38BDF8', width=2),
+            fill='tozeroy',
+            fillcolor='rgba(56, 189, 248, 0.15)',
+            name='เม็ดเงินสะสม (M$)'
+        ), row=2, col=1)
+
+        fig.update_yaxes(title_text="ราคา ETF ($)", row=1, col=1)
+        fig.update_yaxes(title_text="เม็ดเงิน ($M)", row=2, col=1)
+
+        fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
+        fig.update_layout(
+            xaxis_rangeslider_visible=False,
+            template='plotly_dark',
+            margin=dict(l=6, r=10, t=28, b=6),
+            height=440,
+            showlegend=False
+        )
+        return fig
+    except Exception:
+        return None
 
 # ================= 6. ฟังก์ชันดึงข่าวสารเศรษฐกิจมหภาค (Macro News) =================
 @st.cache_data(ttl=900, show_spinner=False)
@@ -1360,10 +1507,10 @@ with tab3:
                             st.markdown(f'<p style="font-size:0.95rem; font-weight:bold; color:#60A5FA; margin-bottom:2px;">🟢 {ticker_found} : {company_name_found} <span class="price-badge badge-market">🏛️ {exchange_found}</span></p>', unsafe_allow_html=True)
                             st.markdown(f'<div class="sector-badge" style="font-size:0.72rem; padding:2px 6px; margin-bottom:4px;">🏷️ {sector_found}</div>', unsafe_allow_html=True)
                             st.markdown(f'<div style="margin-bottom:6px;"><span class="price-badge {badge_status_class}">{status_lbl}</span></div>', unsafe_allow_html=True)
-                            st.caption(f"Support 1: {res_data.get('Support 1 ($)', 0)} | ต้าน 1: {res_data.get('Resist 1 ($)', 0)} | RSI: {res_data.get('RSI', 0)}")
+                            st.caption(f"Support 1: ${res_data.get('Support 1 ($)', 0)} | ต้าน 1: ${res_data.get('Resist 1 ($)', 0)} | RSI: {res_data.get('RSI', 0)}")
                             
                             if raw_df_found is not None:
-                                st.markdown(f'<div class="chart-header-badge">{ticker_found} ({exchange_found}) | ล่าสุด: {res_data.get("Price ($)", 0)} (RSI: {res_data.get("RSI", 0)})</div>', unsafe_allow_html=True)
+                                st.markdown(f'<div class="chart-header-badge">{ticker_found} ({exchange_found}) | ล่าสุด: ${res_data.get("Price ($)", 0)} (RSI: {res_data.get("RSI", 0)})</div>', unsafe_allow_html=True)
                                 fig_gallery_fx = create_ta_chart(raw_df_found, ticker_found, res_data)
                                 if fig_gallery_fx is not None:
                                     st.plotly_chart(fig_gallery_fx, use_container_width=True, config=PLOTLY_CONFIG, key=f"gal_fx_{ticker_found}_{item_idx}")
